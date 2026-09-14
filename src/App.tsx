@@ -20,8 +20,11 @@ import { TraditionalPatrikaView } from './components/TraditionalPatrikaView';
 import { SavedProfilesModal } from './components/SavedProfilesModal';
 import { SubscriptionModal } from './components/SubscriptionModal';
 import { AdminPanelModal } from './components/AdminPanelModal';
+import { AuthModal } from './components/AuthModal';
 import { getSubscription } from './utils/subscriptionEngine';
 import { DigitalVisitingCard } from './components/DigitalVisitingCard';
+import { GurusDirectory } from './components/GurusDirectory';
+import { WalletRechargeView } from './components/WalletRechargeView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { convertADToBS, calculateExactAge, getNakshatraNamakshara, getNakshatraGana } from './utils/nepaliCalendar';
 import {
@@ -43,6 +46,9 @@ import {
   Lock,
   ShieldCheck,
   Key,
+  ArrowLeft,
+  UserCheck,
+  Wallet,
 } from 'lucide-react';
 
 export default function App() {
@@ -51,6 +57,21 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [activeTab, setActiveTab] = useState<string>('summary');
   const [isSavedProfilesOpen, setIsSavedProfilesOpen] = useState(false);
+
+  const [currentUser, setCurrentUser] = useState<{ name: string; identifier: string; provider: string } | null>(() => {
+    const saved = localStorage.getItem('vaidik_jyotish_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const handleLoginSuccess = (user: { name: string; identifier: string; provider: string }) => {
+    setCurrentUser(user);
+    localStorage.setItem('vaidik_jyotish_user', JSON.stringify(user));
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('vaidik_jyotish_user');
+  };
 
   const [subData, setSubData] = useState(() => getSubscription());
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
@@ -83,13 +104,7 @@ export default function App() {
     { id: 'summary', label: t.tabSummary, icon: <Compass className="w-4 h-4" /> },
     { id: 'dasha', label: t.tabDasha, icon: <Clock className="w-4 h-4" /> },
     { id: 'traditionalPatrika', label: t.tabTraditionalPatrika, icon: <Scroll className="w-4 h-4 text-amber-400" /> },
-    { id: 'liveDasha', label: t.tabLiveDashaTransit, icon: <Zap className="w-4 h-4 text-amber-400" /> },
-    { id: 'planets', label: t.tabPlanets, icon: <Sparkles className="w-4 h-4" /> },
-    { id: 'houses', label: t.tabHouses, icon: <Home className="w-4 h-4" /> },
     { id: 'panchanga', label: t.tabPanchanga, icon: <CalendarDays className="w-4 h-4" /> },
-    { id: 'divisional', label: t.tabDivisional, icon: <Layers className="w-4 h-4" /> },
-    { id: 'yogas', label: t.tabYogas, icon: <Award className="w-4 h-4" /> },
-    { id: 'ashtakavarga', label: t.tabAshtakavarga, icon: <Activity className="w-4 h-4" /> },
     { id: 'interpretations', label: t.tabInterpretations, icon: <BookOpen className="w-4 h-4" /> },
   ];
 
@@ -99,6 +114,10 @@ export default function App() {
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'} font-sans selection:bg-amber-500 selection:text-slate-950 transition-colors duration-200`}>
+      {!currentUser && (
+        <AuthModal language={language} onLoginSuccess={handleLoginSuccess} />
+      )}
+
       {/* Top Header */}
       <Header
         language={language}
@@ -110,11 +129,40 @@ export default function App() {
         onOpenSavedProfiles={() => setIsSavedProfilesOpen(true)}
         onPrint={handlePrint}
         onOpenAdmin={() => setIsAdminModalOpen(true)}
-        onOpenSubscription={() => setIsSubModalOpen(true)}
-        isSubscribed={subData.isSubscribed}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onOpenWalletRecharge={() => setActiveTab('walletRecharge')}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Gurus Directory Prominently Above Menu */}
+        <div className="mb-6">
+          <GurusDirectory language={language} />
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="border-b border-amber-900/40 overflow-x-auto print:hidden">
+          <nav className="flex space-x-2 sm:space-x-4 min-w-max pb-2">
+            {tabs.map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-amber-600 text-slate-950 shadow-lg shadow-amber-600/20'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+                  }`}
+                >
+                  {tab.icon}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
         {/* Mobile Quick Action Buttons (Visible only on mobile/tablet) */}
         <div className="flex lg:hidden items-center gap-2 print:hidden">
           <button
@@ -129,7 +177,7 @@ export default function App() {
             onClick={() => setIsMobileCardOpen(true)}
             className="flex-1 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 font-bold px-4 py-3 rounded-2xl shadow-lg text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
           >
-            <Sparkles className="w-4 h-4 text-amber-400" /> 📱 भिजिटिङ कार्ड & बुकिङ
+            <Sparkles className="w-4 h-4 text-amber-400" /> 📱 डिजिटल कार्ड & बुकिङ
           </button>
         </div>
 
@@ -224,29 +272,6 @@ export default function App() {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="border-b border-amber-900/40 overflow-x-auto print:hidden">
-          <nav className="flex space-x-2 sm:space-x-4 min-w-max pb-2">
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-amber-600 text-slate-950 shadow-lg shadow-amber-600/20'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-                  }`}
-                >
-                  {tab.icon}
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </nav>
         </div>
 
         {/* Main Tab Content Display */}
@@ -420,69 +445,17 @@ export default function App() {
                 )}
               </div>
             </div>
+
+            {/* Planetary Table (Graha Spasta) below Kundali */}
+            <PlanetaryTable data={kundaliData} language={language} theme={theme} />
+
+            {/* Yogas (Yoga) below Kundali */}
+            <YogaView data={kundaliData} language={language} />
           </div>
           )}
 
           {activeTab === 'traditionalPatrika' && (
-            subData.isSubscribed ? (
-              <TraditionalPatrikaView data={kundaliData} language={language} chartStyle={chartStyle} />
-            ) : (
-              <div className="bg-slate-900 border border-amber-600/50 rounded-3xl p-8 text-center max-w-2xl mx-auto space-y-6 shadow-2xl relative overflow-hidden my-12">
-                <div className="absolute -right-16 -bottom-16 w-48 h-48 bg-amber-600/10 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="inline-flex p-4 bg-amber-500/10 text-amber-400 rounded-3xl border border-amber-500/30">
-                  <Lock className="w-10 h-10" />
-                </div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-serif font-bold text-amber-200">
-                    परम्परागत नेपाली पत्रिका (सदस्यता आवश्यक)
-                  </h3>
-                  <p className="text-sm text-slate-300 max-w-lg mx-auto">
-                    यो विशेष परम्परागत नेपाली पत्रिका सुविधा केवल सक्रिय सदस्यता (Subscription) लिएका प्रयोगकर्ताहरूका लागि मात्र उपलब्ध छ। कृपया सदस्यता लिनुहोस् र एडमिनबाट प्राप्त कोड प्रयोग गर्नुहोस्।
-                  </p>
-                </div>
-
-                {/* Package Preview */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-left">
-                  <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
-                    <span className="text-[11px] text-slate-400 block font-medium">३ महिना</span>
-                    <span className="text-base font-serif font-bold text-amber-300">रु ३५१</span>
-                  </div>
-                  <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
-                    <span className="text-[11px] text-slate-400 block font-medium">६ महिना</span>
-                    <span className="text-base font-serif font-bold text-amber-300">रु ६५१</span>
-                  </div>
-                  <div className="bg-slate-800/80 p-3 rounded-2xl border border-slate-700">
-                    <span className="text-[11px] text-slate-400 block font-medium">१ वर्ष</span>
-                    <span className="text-base font-serif font-bold text-amber-300">रु १,१११</span>
-                  </div>
-                  <div className="bg-amber-950/50 p-3 rounded-2xl border border-amber-600/60">
-                    <span className="text-[11px] text-amber-400 font-bold block">आजीवन</span>
-                    <span className="text-base font-serif font-bold text-amber-200">रु ३,९९९</span>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    onClick={() => setIsSubModalOpen(true)}
-                    className="bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold px-6 py-3.5 rounded-2xl shadow-xl transition-all text-sm inline-flex items-center gap-2 cursor-pointer"
-                  >
-                    <ShieldCheck className="w-5 h-5" /> सदस्यता लिनुहोस् / कोड हाल्नुहोस्
-                  </button>
-                </div>
-              </div>
-            )
-          )}
-
-          {activeTab === 'liveDasha' && (
-            <CurrentDashaAndTransitView data={kundaliData} language={language} />
-          )}
-
-          {activeTab === 'planets' && (
-            <PlanetaryTable data={kundaliData} language={language} theme={theme} />
-          )}
-
-          {activeTab === 'houses' && (
-            <HouseTable data={kundaliData} language={language} theme={theme} />
+            <TraditionalPatrikaView data={kundaliData} language={language} chartStyle={chartStyle} onBack={() => setActiveTab('summary')} />
           )}
 
           {activeTab === 'panchanga' && (
@@ -493,25 +466,12 @@ export default function App() {
             <DashaView data={kundaliData} language={language} />
           )}
 
-          {activeTab === 'divisional' && (
-            <DivisionalChartsView
-              data={kundaliData}
-              language={language}
-              chartStyle={chartStyle}
-              theme={theme}
-            />
-          )}
-
-          {activeTab === 'yogas' && (
-            <YogaView data={kundaliData} language={language} />
-          )}
-
-          {activeTab === 'ashtakavarga' && (
-            <ShadbalaAshtakavargaView data={kundaliData} language={language} />
-          )}
-
           {activeTab === 'interpretations' && (
             <InterpretationView data={kundaliData} language={language} />
+          )}
+
+          {activeTab === 'walletRecharge' && (
+            <WalletRechargeView language={language} theme={theme} />
           )}
           </ErrorBoundary>
         </div>
@@ -571,7 +531,7 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="bg-slate-900 border border-amber-600/50 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative text-slate-100 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-amber-900/40 mb-4">
-              <h3 className="text-lg font-serif font-bold text-amber-200">डिजिटल भिजिटिङ कार्ड & बुकिङ</h3>
+              <h3 className="text-lg font-serif font-bold text-amber-200">डिजिटल कार्ड & बुकिङ</h3>
               <button
                 type="button"
                 onClick={() => setIsMobileCardOpen(false)}

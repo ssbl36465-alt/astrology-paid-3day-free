@@ -53,7 +53,7 @@ export function DigitalVisitingCard() {
       {/* Digital Business Card Header / Banner */}
       <div className="text-center space-y-2">
         <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold tracking-wide">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" /> आधिकारिक डिजिटल भिजिटिङ कार्ड & बुकिङ सेवा
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" /> आधिकारिक डिजिटल कार्ड & बुकिङ सेवा
         </span>
         <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-200">
           ज्योतिष परामर्श केन्द्र

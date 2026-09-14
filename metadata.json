@@ -1,6 +1,6 @@
 {
-  "name": "Vedic Astrology Calculation Engine",
-  "description": "Precision Sidereal Vedic Kundali calculation engine with Lahiri Ayanamsa, North/South Indian charts, Panchanga, Vimshottari Dasha, Yogas, and Divisional Charts.",
+  "name": "वैदिक ज्योतिष",
+  "description": "Precision Vedic Jyotish calculation engine with Lahiri Ayanamsa, North/South Indian charts, Panchanga, Dasha, Yogas, and Chhina.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

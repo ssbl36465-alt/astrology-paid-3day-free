@@ -24,18 +24,20 @@ import {
   calculateYoginiSubperiods,
 } from '../engine/dashaSubPeriods';
 import { DashaAccordion } from './DashaAccordion';
-import { Printer, Scroll, UserCheck, Sparkles, BookOpen, ShieldCheck, MapPin, Clock, Layers } from 'lucide-react';
+import { Printer, Scroll, UserCheck, Sparkles, BookOpen, ShieldCheck, MapPin, Clock, Layers, ArrowLeft } from 'lucide-react';
 
 interface TraditionalPatrikaViewProps {
   data: KundaliCalculationOutput;
   language: Language;
   chartStyle?: 'north' | 'south' | 'east';
+  onBack?: () => void;
 }
 
 export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
   data,
   language,
   chartStyle = 'north',
+  onBack,
 }) => {
   const { birthDetails, panchanga, ascendant, grahas, vimshottariDasha, audit } = data;
 
@@ -283,13 +285,26 @@ export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handlePrint}
-          className="px-5 py-3 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-slate-950 font-extrabold rounded-xl shadow-lg hover:shadow-amber-500/20 transition-all flex items-center gap-2 cursor-pointer self-stretch md:self-auto justify-center"
-        >
-          <Printer className="w-5 h-5 text-slate-950" />
-          चिना प्रिन्ट / PDF डाउनलोड गर्नुहोस्
-        </button>
+        <div className="flex items-center gap-2 self-stretch md:self-auto">
+          {onBack && (
+            <button
+              type="button"
+              onClick={onBack}
+              className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-bold rounded-xl shadow-lg transition-all flex items-center gap-2 cursor-pointer justify-center"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              गृहपृष्ठमा फर्कनुहोस् (Home)
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="px-5 py-3 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-slate-950 font-extrabold rounded-xl shadow-lg hover:shadow-amber-500/20 transition-all flex items-center gap-2 cursor-pointer justify-center flex-1 md:flex-initial"
+          >
+            <Printer className="w-5 h-5 text-slate-950" />
+            चिना प्रिन्ट / PDF डाउनलोड गर्नुहोस्
+          </button>
+        </div>
       </div>
 
       {/* Editable Inputs Toolbar for Lineage & Astrologer (Hidden in Print) */}
