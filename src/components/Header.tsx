@@ -15,7 +15,7 @@ interface HeaderProps {
   onOpenAdmin: () => void;
   currentUser: { name: string; identifier: string; provider: string } | null;
   onLogout: () => void;
-  onOpenWalletRecharge: () => void;
+  onOpenWallet?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAdmin,
   currentUser,
   onLogout,
-  onOpenWalletRecharge,
+  onOpenWallet,
 }) => {
   const t = UI_TRANSLATIONS[language];
   const isDark = theme === 'dark';
@@ -55,15 +55,15 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Controls - Arranged in 2 neat rows */}
-        <div className="flex flex-col items-end gap-2">
-          {/* Row 1: Chart Style, Theme, Language, Wallet Recharge (Far Right) */}
-          <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* Controls - Arranged strictly in 2 rows */}
+        <div className="flex flex-col items-end gap-1.5">
+          {/* Row 1: Chart Style, Theme, Language, Custom App */}
+          <div className="flex items-center justify-end gap-1.5 flex-wrap md:flex-nowrap">
             {/* North vs South vs East Chart Toggle */}
-            <div className={`${isDark ? 'bg-slate-800/95 border-slate-700/60 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'} p-1 rounded-lg border flex items-center text-xs`}>
+            <div className={`${isDark ? 'bg-slate-800/95 border-slate-700/60 text-slate-300' : 'bg-slate-100 border-slate-200 text-slate-700'} p-0.5 rounded-lg border flex items-center text-xs`}>
               <button
                 onClick={() => setChartStyle('north')}
-                className={`px-2.5 py-1.5 rounded-md font-medium transition-all ${
+                className={`px-2 py-1 rounded-md font-medium transition-all ${
                   chartStyle === 'north'
                     ? 'bg-amber-600 text-white font-semibold shadow-md'
                     : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-black'
@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
               <button
                 onClick={() => setChartStyle('south')}
-                className={`px-2.5 py-1.5 rounded-md font-medium transition-all ${
+                className={`px-2 py-1 rounded-md font-medium transition-all ${
                   chartStyle === 'south'
                     ? 'bg-amber-600 text-white font-semibold shadow-md'
                     : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-black'
@@ -83,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
               <button
                 onClick={() => setChartStyle('east')}
-                className={`px-2.5 py-1.5 rounded-md font-medium transition-all ${
+                className={`px-2 py-1 rounded-md font-medium transition-all ${
                   chartStyle === 'east'
                     ? 'bg-amber-600 text-white font-semibold shadow-md'
                     : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-black'
@@ -96,98 +96,100 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Theme Toggle Button */}
             <button
               onClick={() => setTheme(isDark ? 'light' : 'dark')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
                 isDark 
                   ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-amber-300' 
                   : 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-800'
               }`}
               title={isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
             >
-              {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-amber-700" />}
-              <span className="hidden sm:inline">{isDark ? 'Light' : 'Dark'}</span>
+              {isDark ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5 text-amber-700" />}
+              <span>{isDark ? 'Light' : 'Dark'}</span>
             </button>
 
             {/* Language Selector */}
             <button
               onClick={() => setLanguage(language === 'en' ? 'ne' : 'en')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
                 isDark 
                   ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-amber-300' 
                   : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
               }`}
             >
-              <Languages className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+              <Languages className={`w-3.5 h-3.5 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
               <span>{language === 'en' ? 'नेपाली' : 'English'}</span>
             </button>
 
-            {/* Wallet Recharge Button (Far Right of Row 1) */}
-            <button
-              onClick={onOpenWalletRecharge}
-              className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg border text-xs font-bold transition-all shadow-md ${
-                isDark 
-                  ? 'bg-amber-600 hover:bg-amber-500 border-amber-500 text-slate-950' 
-                  : 'bg-amber-600 hover:bg-amber-500 border-amber-600 text-white'
-              }`}
-              title="Wallet Recharge"
-            >
-              <Wallet className="w-4 h-4" />
-              <span>{language === 'ne' ? 'वालेट रिचार्ज' : 'Recharge'}</span>
-            </button>
+            {/* Wallet Recharge Button */}
+            {onOpenWallet && (
+              <button
+                onClick={onOpenWallet}
+                className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-all shadow-sm ${
+                  isDark
+                    ? 'bg-amber-950/70 hover:bg-amber-900 border-amber-600/60 text-amber-300'
+                    : 'bg-amber-100 hover:bg-amber-200 border-amber-400 text-amber-900'
+                }`}
+                title="वालेट टपअप तथा रिचार्ज"
+              >
+                <Wallet className="w-3.5 h-3.5 text-amber-500" />
+                <span>{language === 'ne' ? '💰 वालेट रिचार्ज' : '💰 Wallet'}</span>
+              </button>
+            )}
           </div>
 
-          {/* Row 2: Saved Profiles, Admin, Print */}
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Row 2: Saved Profiles, Admin, Print, User Profile */}
+          <div className="flex items-center justify-end gap-1.5 flex-wrap md:flex-nowrap">
             {/* Saved Profiles */}
             <button
               onClick={onOpenSavedProfiles}
-              className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
                 isDark
                   ? 'bg-amber-950/60 hover:bg-amber-900/80 border-amber-700/50 text-amber-300'
                   : 'bg-amber-100 hover:bg-amber-200 border-amber-300 text-amber-900'
               }`}
             >
-              <Bookmark className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-700'}`} />
-              <span className="hidden sm:inline">{t.savedKundalis}</span>
+              <Bookmark className={`w-3.5 h-3.5 ${isDark ? 'text-amber-400' : 'text-amber-700'}`} />
+              <span>{t.savedKundalis}</span>
             </button>
 
             {/* Admin Panel Button */}
             <button
               onClick={onOpenAdmin}
-              className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              className={`flex items-center space-x-1 px-2 py-1 rounded-lg border text-xs font-medium transition-colors ${
                 isDark
                   ? 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300'
                   : 'bg-slate-200 hover:bg-slate-300 border-slate-300 text-slate-800'
               }`}
               title="Admin Panel"
             >
-              <Key className="w-3.5 h-3.5 text-amber-500" />
-              <span className="hidden md:inline">Admin</span>
+              <Key className="w-3 h-3 text-amber-500" />
+              <span>Admin</span>
             </button>
 
             {/* Print / Save */}
             <button
               onClick={onPrint}
-              className={`flex items-center space-x-1 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+              className={`flex items-center space-x-1 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors ${
                 isDark
                   ? 'bg-emerald-950/60 hover:bg-emerald-900/80 border-emerald-700/50 text-emerald-300'
                   : 'bg-emerald-100 hover:bg-emerald-200 border-emerald-300 text-emerald-900'
               }`}
             >
-              <Printer className={`w-4 h-4 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`} />
-              <span className="hidden sm:inline">{t.exportPDF}</span>
+              <Printer className={`w-3.5 h-3.5 ${isDark ? 'text-emerald-400' : 'text-emerald-700'}`} />
+              <span>{t.exportPDF}</span>
             </button>
 
             {/* User Profile & Logout */}
             {currentUser && (
-              <div className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-lg border text-xs font-medium ${isDark ? 'bg-slate-800/80 border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'}`}>
-                <User className="w-3.5 h-3.5 text-amber-500" />
+              <div className={`flex items-center space-x-1.5 px-2 py-1 rounded-lg border text-xs font-medium ${isDark ? 'bg-slate-800/80 border-slate-700 text-slate-200' : 'bg-slate-100 border-slate-200 text-slate-800'}`}>
+                <User className="w-3 h-3 text-amber-500" />
                 <span className="max-w-[100px] truncate">{currentUser.name}</span>
                 <button
                   onClick={onLogout}
-                  className="p-1 hover:text-red-400 transition-colors cursor-pointer"
+                  className="p-0.5 hover:text-red-400 transition-colors cursor-pointer"
                   title={language === 'ne' ? 'लगआउट गर्नुहोस्' : 'Logout'}
                 >
-                  <LogOut className="w-3.5 h-3.5 text-red-500" />
+                  <LogOut className="w-3 h-3 text-red-500" />
                 </button>
               </div>
             )}

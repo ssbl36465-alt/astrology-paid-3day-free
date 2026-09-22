@@ -18,7 +18,24 @@ export const WalletRechargeView: React.FC<WalletRechargeViewProps> = ({ language
   const [amount, setAmount] = useState<string>('500');
   const [selectedMethod, setSelectedMethod] = useState<'esewa' | 'khalti' | 'bank'>('esewa');
   const [voucherUrl, setVoucherUrl] = useState<string>('');
+  const [customQrs, setCustomQrs] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem('vaidik_custom_qrs');
+    return saved ? JSON.parse(saved) : {};
+  });
   const [successMsg, setSuccessMsg] = useState<string>('');
+
+  const handleQrUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const updated = { ...customQrs, [selectedMethod]: reader.result as string };
+        setCustomQrs(updated);
+        localStorage.setItem('vaidik_custom_qrs', JSON.stringify(updated));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
   const [transactions, setTransactions] = useState<Array<{ id: string; amount: number; method: string; date: string; status: string }>>(() => {
     const saved = localStorage.getItem('vaidik_client_transactions');
     return saved ? JSON.parse(saved) : [
@@ -65,9 +82,28 @@ export const WalletRechargeView: React.FC<WalletRechargeViewProps> = ({ language
     setTransactions(updatedTxns);
     localStorage.setItem('vaidik_client_transactions', JSON.stringify(updatedTxns));
 
-    setSuccessMsg(isNe ? `रु ${topupAmount} सफलतापूर्वक तपाईंको वालेटमा जम्मा भयो!` : `Rs ${topupAmount} successfully credited to your wallet!`);
+    // Save to admin client recharges
+    const rechargeRecord = {
+      id: newTxn.id,
+      clientName: localStorage.getItem('vaidik_client_name') || 'Valued Client',
+      clientPhone: localStorage.getItem('vaidik_client_phone') || '+977 9863991384',
+      amount: topupAmount,
+      paymentMethod: selectedMethod.toUpperCase(),
+      voucherUrl: voucherUrl,
+      createdAt: new Date().toISOString(),
+      status: 'pending'
+    };
+
+    const existingRecharges = JSON.parse(localStorage.getItem('vaidik_client_recharges') || '[]');
+    localStorage.setItem('vaidik_client_recharges', JSON.stringify([rechargeRecord, ...existingRecharges]));
+
+    // Open WhatsApp
+    const waText = encodeURIComponent(`रिचार्ज प्रमाणित गरी ब्यालेन्स जोड्नुहोस्, छिटो गर्न WhatsApp मा SMS गर्नुहोला।\n\n*Recharge Details:*\n- ID: ${newTxn.id}\n- Amount: रु ${topupAmount}\n- Method: ${selectedMethod.toUpperCase()}\n- Date: ${newTxn.date}\n- Voucher: Attached`);
+    window.open(`https://wa.me/9863991384?text=${waText}`, '_blank');
+
+    setSuccessMsg(isNe ? `रु ${topupAmount} को भौचर एडमिन प्यानलमा पठाइयो र WhatsApp मा सन्देश खुल्दैछ!` : `Rs ${topupAmount} voucher sent to Admin Panel & WhatsApp opened!`);
     setVoucherUrl('');
-    setTimeout(() => setSuccessMsg(''), 5000);
+    setTimeout(() => setSuccessMsg(''), 6000);
   };
 
   return (
@@ -149,8 +185,8 @@ export const WalletRechargeView: React.FC<WalletRechargeViewProps> = ({ language
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {[
-                  { id: 'esewa', label: 'eSewa QR' },
-                  { id: 'khalti', label: 'Khalti QR' },
+                  { id: 'esewa', label: 'eSewa' },
+                  { id: 'khalti', label: 'Khalti' },
                   { id: 'bank', label: 'Bank Transfer' },
                 ].map((m) => (
                   <button
@@ -169,14 +205,89 @@ export const WalletRechargeView: React.FC<WalletRechargeViewProps> = ({ language
               </div>
             </div>
 
-            {/* QR Code Display for selected method */}
-            <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-              <div className="w-24 h-24 bg-white p-2 rounded-xl flex items-center justify-center shrink-0">
-                <QrCode className="w-full h-full text-slate-900" />
+            {/* Payment Methods - Separate Individual Cards (Without top WhatsApp buttons) */}
+            <div className="space-y-4">
+              <label className="text-xs font-semibold text-amber-300 block">
+                {isNe ? 'आधिकारिक भुक्तानी माध्यमहरू (Official Payment Details):' : 'Official Payment Methods:'}
+              </label>
+
+              {/* 1. eSewa Card */}
+              <div className="bg-slate-950 border border-emerald-500/40 p-4 rounded-2xl shadow-lg space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" /> eSewa Wallet
+                  </span>
+                  <span className="text-[11px] text-slate-300 font-medium">नाम: Shambhu Lamsal</span>
+                </div>
+                <div className="flex items-center justify-between bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <div>
+                    <p className="text-[10px] text-slate-400">{isNe ? 'मोबाइल नम्बर:' : 'Mobile Number:'}</p>
+                    <p className="font-mono font-bold text-amber-300 text-sm select-all">9863991384</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('9863991384');
+                      alert(isNe ? 'eSewa नम्बर कपी भयो!' : 'eSewa number copied!');
+                    }}
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium cursor-pointer border border-slate-700"
+                  >
+                    {isNe ? 'कपी' : 'Copy'}
+                  </button>
+                </div>
               </div>
-              <div className="space-y-1 text-xs text-slate-300">
-                <p className="font-semibold text-amber-300">{selectedMethod === 'esewa' ? 'eSewa ID: 9841000000 (Vaidik Jyotish)' : selectedMethod === 'khalti' ? 'Khalti ID: 9841000000' : 'Global IME Bank: 010101000000'}</p>
-                <p>{isNe ? 'माथिको क्युआर कोडमा स्क्यान गरी भुक्तानी गर्नुहोस् र भौचर स्क्रिनसट अपलोड गर्नुहोस्।' : 'Scan QR above to pay and upload voucher screenshot.'}</p>
+
+              {/* 2. Khalti Card */}
+              <div className="bg-slate-950 border border-purple-500/40 p-4 rounded-2xl shadow-lg space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" /> Khalti Wallet
+                  </span>
+                  <span className="text-[11px] text-slate-300 font-medium">नाम: Shambu Lamsal</span>
+                </div>
+                <div className="flex items-center justify-between bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <div>
+                    <p className="text-[10px] text-slate-400">{isNe ? 'मोबाइल नम्बर:' : 'Mobile Number:'}</p>
+                    <p className="font-mono font-bold text-amber-300 text-sm select-all">9810465055</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('9810465055');
+                      alert(isNe ? 'Khalti नम्बर कपी भयो!' : 'Khalti number copied!');
+                    }}
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium cursor-pointer border border-slate-700"
+                  >
+                    {isNe ? 'कपी' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+
+              {/* 3. Nabil Bank Card */}
+              <div className="bg-slate-950 border border-cyan-500/40 p-4 rounded-2xl shadow-lg space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" /> Nabil Bank A/C
+                  </span>
+                  <span className="text-[11px] text-slate-300 font-medium">SHAMBU LAMSAL</span>
+                </div>
+                <div className="flex items-center justify-between bg-slate-900 p-3 rounded-xl border border-slate-800">
+                  <div>
+                    <p className="text-[10px] text-slate-400">{isNe ? 'खाता नम्बर (A/C No):' : 'Account Number:'}</p>
+                    <p className="font-mono font-bold text-amber-300 text-sm select-all">04110017507343</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">NABIL GEN N ACCOUNT</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText('04110017507343');
+                      alert(isNe ? 'बैंक खाता नम्बर कपी भयो!' : 'Bank account number copied!');
+                    }}
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium cursor-pointer border border-slate-700"
+                  >
+                    {isNe ? 'कपी' : 'Copy'}
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -24,6 +24,9 @@ import { AuthModal } from './components/AuthModal';
 import { getSubscription } from './utils/subscriptionEngine';
 import { DigitalVisitingCard } from './components/DigitalVisitingCard';
 import { GurusDirectory } from './components/GurusDirectory';
+import { VastuView } from './components/VastuView';
+import { AppServiceCard } from './components/AppServiceCard';
+import { BirthSummaryCard } from './components/BirthSummaryCard';
 import { WalletRechargeView } from './components/WalletRechargeView';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { convertADToBS, calculateExactAge, getNakshatraNamakshara, getNakshatraGana } from './utils/nepaliCalendar';
@@ -55,7 +58,7 @@ export default function App() {
   const [language, setLanguage] = useState<Language>('ne'); // Default to Nepali
   const [chartStyle, setChartStyle] = useState<ChartStyle>('north'); // Default to North Indian
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [activeTab, setActiveTab] = useState<string>('summary');
+  const [activeTab, setActiveTab] = useState<string>('gurus');
   const [isSavedProfilesOpen, setIsSavedProfilesOpen] = useState(false);
 
   const [currentUser, setCurrentUser] = useState<{ name: string; identifier: string; provider: string } | null>(() => {
@@ -80,7 +83,7 @@ export default function App() {
   const [isMobileCardOpen, setIsMobileCardOpen] = useState(false);
 
   const [birthDetails, setBirthDetails] = useState<BirthDetails>({
-    name: 'Shree Ram',
+    name: 'राम',
     dob: '1995-10-24',
     tob: '10:30:00',
     birthPlace: 'Kathmandu, Nepal',
@@ -101,11 +104,13 @@ export default function App() {
   const isDark = theme === 'dark';
 
   const tabs = [
+    { id: 'gurus', label: isNe ? 'गुरुहरू' : 'Gurus', icon: <UserCheck className="w-4 h-4 text-amber-400" /> },
     { id: 'summary', label: t.tabSummary, icon: <Compass className="w-4 h-4" /> },
     { id: 'dasha', label: t.tabDasha, icon: <Clock className="w-4 h-4" /> },
     { id: 'traditionalPatrika', label: t.tabTraditionalPatrika, icon: <Scroll className="w-4 h-4 text-amber-400" /> },
     { id: 'panchanga', label: t.tabPanchanga, icon: <CalendarDays className="w-4 h-4" /> },
     { id: 'interpretations', label: t.tabInterpretations, icon: <BookOpen className="w-4 h-4" /> },
+    { id: 'appService', label: isNe ? 'विशेष एप / ३००+ पेज' : 'Custom App & 300+', icon: <Sparkles className="w-4 h-4 text-amber-400" /> },
   ];
 
   const handlePrint = () => {
@@ -131,15 +136,10 @@ export default function App() {
         onOpenAdmin={() => setIsAdminModalOpen(true)}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onOpenWalletRecharge={() => setActiveTab('walletRecharge')}
+        onOpenWallet={() => setActiveTab('wallet')}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Gurus Directory Prominently Above Menu */}
-        <div className="mb-6">
-          <GurusDirectory language={language} />
-        </div>
-
         {/* Tab Navigation */}
         <div className="border-b border-amber-900/40 overflow-x-auto print:hidden">
           <nav className="flex space-x-2 sm:space-x-4 min-w-max pb-2">
@@ -181,104 +181,39 @@ export default function App() {
           </button>
         </div>
 
-        {/* Top Grid: Form + Birth Summary Banner */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left: Input Form & Digital Visiting Card (5 cols) - Desktop Only */}
-          <div className="hidden lg:block lg:col-span-5 space-y-6 print:hidden">
-            <BirthForm
-              language={language}
-              onSubmit={(details) => setBirthDetails(details)}
-              initialValues={birthDetails}
-            />
-            <div className="bg-slate-900 border border-amber-600/30 rounded-3xl p-4 shadow-xl">
-              <DigitalVisitingCard />
-            </div>
-          </div>
-
-          {/* Right: Birth Summary & Quick Telemetry Card (7 cols on desktop, full on mobile) */}
-          <div className="col-span-1 lg:col-span-7 space-y-4">
-            <div className="bg-slate-900 border border-amber-900/50 rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 relative overflow-hidden">
-              <div className="absolute -right-10 -bottom-10 w-48 h-48 bg-amber-600/10 rounded-full blur-3xl pointer-events-none"></div>
-
-              <div className="flex flex-wrap items-center justify-between pb-3 border-b border-amber-900/30 gap-2">
-                <div className="flex items-center space-x-2">
-                  <User className="w-5 h-5 text-amber-400" />
-                  <h2 className="text-xl font-serif font-bold text-amber-200">
-                    {birthDetails.name}
-                  </h2>
-                </div>
-                <span className="text-xs bg-amber-950 text-amber-300 border border-amber-700/60 px-3 py-1 rounded-full font-mono font-semibold">
-                  {t.lagna}: {isNe ? kundaliData.ascendant.signNameNe : kundaliData.ascendant.signNameEn} ({kundaliData.ascendant.degreeFormatted})
-                </span>
-              </div>
-
-              {/* Grid Metrics */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-                  <span className="text-slate-400 block text-[11px] font-medium flex items-center gap-1 mb-1">
-                    <Calendar className="w-3.5 h-3.5 text-amber-400" /> Date & Time
-                  </span>
-                  <span className="font-mono font-semibold text-slate-100">
-                    {birthDetails.dob}
-                  </span>
-                  <span className="font-mono text-slate-300 block text-[11px]">
-                    {birthDetails.tob} Local
-                  </span>
-                </div>
-
-                <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-                  <span className="text-slate-400 block text-[11px] font-medium flex items-center gap-1 mb-1">
-                    <MapPin className="w-3.5 h-3.5 text-amber-400" /> Location
-                  </span>
-                  <span className="font-medium text-slate-100 truncate block">
-                    {birthDetails.birthPlace}
-                  </span>
-                  <span className="font-mono text-slate-400 block text-[10px]">
-                    {birthDetails.latitude.toFixed(2)}°N, {birthDetails.longitude.toFixed(2)}°E
-                  </span>
-                </div>
-
-                <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-                  <span className="text-slate-400 block text-[11px] font-medium flex items-center gap-1 mb-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Moon Sign & Nakshatra
-                  </span>
-                  {(() => {
-                    const moonGraha = kundaliData?.grahas?.find((g) => g.name === 'Moon') || kundaliData?.grahas?.[0];
-                    return (
-                      <>
-                        <span className="font-semibold text-amber-300">
-                          {isNe ? (moonGraha?.signNameNe || 'वृष') : (moonGraha?.signNameEn || 'Taurus')}
-                        </span>
-                        <span className="text-slate-300 block text-[11px]">
-                          {isNe ? (moonGraha?.nakshatraNameNe || 'कृतिका') : (moonGraha?.nakshatraNameEn || 'Krittika')} (Pada {moonGraha?.pada || 1})
-                        </span>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-
-              {/* Active Dasha Highlight */}
-              <div className="bg-amber-950/40 border border-amber-800/50 rounded-xl p-3 text-xs flex items-center justify-between">
-                <span className="text-amber-300 font-semibold flex items-center gap-1.5">
-                  <Clock className="w-4 h-4 text-amber-400" />
-                  {t.currentDasha}:
-                </span>
-                <span className="font-mono font-bold text-amber-200">
-                  {isNe ? (GRAHA_MAP[kundaliData?.vimshottariDasha?.currentMahadasha]?.ne || kundaliData?.vimshottariDasha?.currentMahadasha) : kundaliData?.vimshottariDasha?.currentMahadasha}
-                  {' / '}
-                  {isNe ? (GRAHA_MAP[kundaliData?.vimshottariDasha?.currentAntardasha]?.ne || kundaliData?.vimshottariDasha?.currentAntardasha) : kundaliData?.vimshottariDasha?.currentAntardasha}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Main Tab Content Display */}
         <div className="space-y-6">
           <ErrorBoundary key={activeTab}>
-          {activeTab === 'summary' && (
+          {activeTab === 'gurus' && (
             <div className="space-y-6">
+              <GurusDirectory language={language} onOpenWallet={() => setActiveTab('wallet')} />
+            </div>
+          )}
+
+
+          {activeTab === 'summary' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left: Input Form & Digital Visiting Card (5 cols) - Desktop Only */}
+              <div className="hidden lg:block lg:col-span-5 space-y-6 print:hidden">
+                <BirthForm
+                  language={language}
+                  onSubmit={(details) => setBirthDetails(details)}
+                  initialValues={birthDetails}
+                />
+                <div className="bg-slate-900 border border-amber-600/30 rounded-3xl p-4 shadow-xl">
+                  <DigitalVisitingCard />
+                </div>
+              </div>
+
+              {/* Right: Summary Card & Charts (7 cols) */}
+              <div className="col-span-1 lg:col-span-7 space-y-6">
+                <BirthSummaryCard
+                  birthDetails={birthDetails}
+                  kundaliData={kundaliData}
+                  language={language}
+                  theme={theme}
+                  onUpdateDetails={(details) => setBirthDetails(details)}
+                />
               {/* Detailed Birth Summary & Exact Age Card above Kundali Charts */}
               {(() => {
                 const birthAd = new Date(birthDetails.dob);
@@ -452,10 +387,20 @@ export default function App() {
             {/* Yogas (Yoga) below Kundali */}
             <YogaView data={kundaliData} language={language} />
           </div>
+          </div>
           )}
 
           {activeTab === 'traditionalPatrika' && (
-            <TraditionalPatrikaView data={kundaliData} language={language} chartStyle={chartStyle} onBack={() => setActiveTab('summary')} />
+            <div className="space-y-6">
+              <BirthSummaryCard
+                birthDetails={birthDetails}
+                kundaliData={kundaliData}
+                language={language}
+                theme={theme}
+                onUpdateDetails={(details) => setBirthDetails(details)}
+              />
+              <TraditionalPatrikaView data={kundaliData} language={language} chartStyle={chartStyle} onBack={() => setActiveTab('summary')} />
+            </div>
           )}
 
           {activeTab === 'panchanga' && (
@@ -470,7 +415,11 @@ export default function App() {
             <InterpretationView data={kundaliData} language={language} />
           )}
 
-          {activeTab === 'walletRecharge' && (
+          {activeTab === 'appService' && (
+            <AppServiceCard language={language} />
+          )}
+
+          {activeTab === 'wallet' && (
             <WalletRechargeView language={language} theme={theme} />
           )}
           </ErrorBoundary>

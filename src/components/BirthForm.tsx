@@ -15,7 +15,7 @@ export const BirthForm: React.FC<BirthFormProps> = ({ language, onSubmit, initia
   const t = UI_TRANSLATIONS[language];
 
   const defaultDetails: BirthDetails = initialValues || {
-    name: 'Shree Ram',
+    name: 'राम',
     dob: '1995-10-24',
     tob: '10:30:00',
     birthPlace: 'Kathmandu, Nepal',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types/astrology';
-import { UserCheck, Award, Phone, Video, MessageSquare, Star, CheckCircle, Upload, ShieldCheck, X, Send, Sparkles, AlertCircle, Clock, DollarSign, Wallet, FileText, Image as ImageIcon, Flag } from 'lucide-react';
+import { UserCheck, Award, Phone, Video, MessageSquare, Star, CheckCircle, Upload, ShieldCheck, X, Send, Sparkles, AlertCircle, Clock, DollarSign, Wallet, FileText, Image as ImageIcon, Flag, Info } from 'lucide-react';
 
 interface GuruProfile {
   id: string;
@@ -25,6 +25,7 @@ interface GuruProfile {
 
 interface GurusDirectoryProps {
   language: Language;
+  onOpenWallet?: () => void;
 }
 
 const INITIAL_GURUS: GuruProfile[] = [
@@ -90,7 +91,7 @@ const INITIAL_GURUS: GuruProfile[] = [
   },
 ];
 
-export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
+export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpenWallet }) => {
   const isNe = language === 'ne';
   const [gurus, setGurus] = useState<GuruProfile[]>(() => {
     const saved = localStorage.getItem('vaidik_jyotish_gurus');
@@ -122,6 +123,13 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
   const [reviewComment, setReviewComment] = useState('');
   const [rateSuccess, setRateSuccess] = useState('');
 
+  // Reviews Modal State
+  const [reviewsGuru, setReviewsGuru] = useState<GuruProfile | null>(null);
+  const [isReviewsModalOpen, setIsReviewsModalOpen] = useState(false);
+
+  // Legal & About Us Modal State
+  const [isLegalModalOpen, setIsLegalModalOpen] = useState(false);
+
   // Report Modal State
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [reportGuru, setReportGuru] = useState<GuruProfile | null>(null);
@@ -148,6 +156,17 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
   const [rechargeVoucherUrl, setRechargeVoucherUrl] = useState('');
   const [rechargeSuccess, setRechargeSuccess] = useState('');
 
+  // Birth Details Modal State (Customer providing birth details before connecting with guru)
+  const [isBirthDetailsModalOpen, setIsBirthDetailsModalOpen] = useState(false);
+  const [pendingGuruAction, setPendingGuruAction] = useState<'chat' | 'audio' | 'video' | null>(null);
+  const [pendingGuruTarget, setPendingGuruTarget] = useState<GuruProfile | null>(null);
+
+  const [clientDobYear, setClientDobYear] = useState(() => localStorage.getItem('vaidik_client_dob_year') || '2050');
+  const [clientDobMonth, setClientDobMonth] = useState(() => localStorage.getItem('vaidik_client_dob_month') || 'वैशाख');
+  const [clientDobDay, setClientDobDay] = useState(() => localStorage.getItem('vaidik_client_dob_day') || '15');
+  const [clientDobTime, setClientDobTime] = useState(() => localStorage.getItem('vaidik_client_dob_time') || '10:30 AM');
+  const [clientDobPlace, setClientDobPlace] = useState(() => localStorage.getItem('vaidik_client_dob_place') || 'काठमाडौं, नेपाल');
+
   // Registration Form State
   const [regName, setRegName] = useState('');
   const [regAge, setRegAge] = useState('');
@@ -159,34 +178,54 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
   const [regCertificateFile, setRegCertificateFile] = useState<string>('');
   const [regError, setRegError] = useState('');
   const [regSuccess, setRegSuccess] = useState('');
+  const [regAgreed, setRegAgreed] = useState(false);
+  const [isCodeOfConductModalOpen, setIsCodeOfConductModalOpen] = useState(false);
 
   // Chat/Call state
   const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'guru'; text: string; time: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
 
-  // Call simulation timer
+  // Call simulation timer & status
   const [callDuration, setCallDuration] = useState(0);
+  const [callStatus, setCallStatus] = useState<'ringing' | 'connected'>('ringing');
+  const [activeCallType, setActiveCallType] = useState<'audio' | 'video' | null>(null);
 
   useEffect(() => {
     localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(gurus));
   }, [gurus]);
 
   useEffect(() => {
+    let connectTimeout: any = null;
+    if ((activeModal === 'audio' || activeModal === 'video') && callStatus === 'ringing') {
+      connectTimeout = setTimeout(() => {
+        setCallStatus('connected');
+      }, 3000); // Automatically receive call after 3 seconds of ringing
+    }
+    return () => clearTimeout(connectTimeout);
+  }, [activeModal, callStatus]);
+
+  useEffect(() => {
     let timer: any = null;
-    if (activeModal === 'audio' || activeModal === 'video') {
-      setCallDuration(0);
+    if ((activeModal === 'audio' || activeModal === 'video') && callStatus === 'connected') {
       timer = setInterval(() => {
         setCallDuration((prev) => prev + 1);
       }, 1000);
-    } else {
+    } else if (!activeModal) {
       if (callDuration > 0 && selectedGuru) {
         const minutesSpent = Math.max(1, Math.ceil(callDuration / 60));
-        const earningsAdd = activeModal === 'audio' ? 25 * minutesSpent : 50 * minutesSpent;
+        const isAudio = activeCallType === 'audio';
+        const earningsAdd = isAudio ? 10 * minutesSpent : 12 * minutesSpent;
+        const customerDeduct = isAudio ? 20 * minutesSpent : 25 * minutesSpent;
+
+        const currentBalance = parseFloat(localStorage.getItem('vaidik_client_wallet_balance') || '500');
+        const newBalance = Math.max(0, currentBalance - customerDeduct);
+        localStorage.setItem('vaidik_client_wallet_balance', newBalance.toString());
+
         setGurus((prev) =>
           prev.map((g) => {
             if (g.id === selectedGuru.id) {
-              const newAudioCount = activeModal === 'audio' ? g.audioCallsCount + 1 : g.audioCallsCount;
-              const newVideoCount = activeModal === 'video' ? g.videoCallsCount + 1 : g.videoCallsCount;
+              const newAudioCount = isAudio ? g.audioCallsCount + 1 : g.audioCallsCount;
+              const newVideoCount = !isAudio ? g.videoCallsCount + 1 : g.videoCallsCount;
               const newMinutes = g.consultationMinutes + minutesSpent;
               const newEarnings = g.totalEarningsRs + earningsAdd;
               return {
@@ -202,10 +241,11 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
             return g;
           })
         );
+        setActiveCallType(null);
       }
     }
     return () => clearInterval(timer);
-  }, [activeModal]);
+  }, [activeModal, callStatus]);
 
   const checkGuruAvailable = (guru: GuruProfile) => {
     if (guru.status === 'offline') {
@@ -219,8 +259,79 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
     return true;
   };
 
+  const checkWalletBalance = (type: 'chat' | 'audio' | 'video') => {
+    const balance = parseFloat(localStorage.getItem('vaidik_client_wallet_balance') || '500');
+    const requiredMin = type === 'audio' ? 20 : type === 'video' ? 25 : 10;
+    if (balance < requiredMin) {
+      alert(isNe 
+        ? `⚠️ तपाईंको वालेटमा पर्याप्त ब्यालेन्स छैन। यस सेवाको लागि कम्तीमा रु ${requiredMin} आवश्यक पर्छ। कृपया पहिले वालेट रिचार्ज गर्नुहोस्।` 
+        : `Insufficient balance. At least Rs ${requiredMin} required. Please recharge.`);
+      if (onOpenWallet) {
+        onOpenWallet();
+      }
+      return false;
+    }
+    return true;
+  };
+
+  const handleInitiateInteraction = (guru: GuruProfile, type: 'chat' | 'audio' | 'video') => {
+    if (!checkGuruAvailable(guru)) return;
+    if (!checkWalletBalance(type)) return;
+    setPendingGuruTarget(guru);
+    setPendingGuruAction(type);
+    setIsBirthDetailsModalOpen(true);
+  };
+
+  const handleBirthDetailsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clientDobYear || !clientDobMonth || !clientDobDay || !clientDobTime || !clientDobPlace) {
+      alert(isNe ? 'कृपया सबै जन्म विवरणहरू (साल, महिना, गते, समय, स्थान) अनिवार्य रूपमा भर्नुहोस्।' : 'Please fill all birth details.');
+      return;
+    }
+    localStorage.setItem('vaidik_client_dob_year', clientDobYear);
+    localStorage.setItem('vaidik_client_dob_month', clientDobMonth);
+    localStorage.setItem('vaidik_client_dob_day', clientDobDay);
+    localStorage.setItem('vaidik_client_dob_time', clientDobTime);
+    localStorage.setItem('vaidik_client_dob_place', clientDobPlace);
+
+    const birthDetailsText = isNe
+      ? `🙏 मेरो जन्म विवरण:\n• जन्म मिति: ${clientDobYear} साल ${clientDobMonth} महिना ${clientDobDay} गते\n• जन्म समय: ${clientDobTime}\n• जन्मस्थान: ${clientDobPlace}`
+      : `🙏 My Birth Details:\n- DOB: ${clientDobYear} ${clientDobMonth} ${clientDobDay}\n- Time: ${clientDobTime}\n- Place: ${clientDobPlace}`;
+
+    setIsBirthDetailsModalOpen(false);
+
+    if (pendingGuruTarget && pendingGuruAction) {
+      setSelectedGuru(pendingGuruTarget);
+      setGurus((prev) => prev.map((g) => g.id === pendingGuruTarget.id ? { ...g, status: 'busy' } : g));
+
+      if (pendingGuruAction === 'chat') {
+        setChatMessages([
+          {
+            sender: 'user',
+            text: birthDetailsText,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+          {
+            sender: 'guru',
+            text: isNe 
+              ? `नमस्कार! म ${pendingGuruTarget.name} हुँ। तपाईंको जन्म विवरण (${clientDobYear} साल, ${clientDobMonth} ${clientDobDay} गते, ${clientDobPlace}) प्राप्त भयो। तपाईंलाई कसरी मद्दत गर्न सक्छु?`
+              : `Hello! I am ${pendingGuruTarget.name}. Received your birth details. How can I assist you?`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+        setActiveModal('chat');
+      } else {
+        setActiveCallType(pendingGuruAction);
+        setCallDuration(0);
+        setCallStatus('ringing');
+        setActiveModal(pendingGuruAction);
+      }
+    }
+  };
+
   const startChat = (guru: GuruProfile) => {
     if (!checkGuruAvailable(guru)) return;
+    if (!checkWalletBalance('chat')) return;
     setSelectedGuru(guru);
     setGurus((prev) => prev.map((g) => g.id === guru.id ? { ...g, status: 'busy' } : g));
     setChatMessages([
@@ -235,8 +346,12 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
 
   const startCall = (guru: GuruProfile, type: 'audio' | 'video') => {
     if (!checkGuruAvailable(guru)) return;
+    if (!checkWalletBalance(type)) return;
     setSelectedGuru(guru);
+    setActiveCallType(type);
     setGurus((prev) => prev.map((g) => g.id === guru.id ? { ...g, status: 'busy' } : g));
+    setCallDuration(0);
+    setCallStatus('ringing');
     setActiveModal(type);
   };
 
@@ -411,6 +526,10 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
       setRegError(isNe ? 'कृपया सबै अनिवार्य विवरणहरू भर्नुहोस् र प्रमाणपत्र अपलोड गर्नुहोस्।' : 'Please fill in all required fields and upload certificate.');
       return;
     }
+    if (!regAgreed) {
+      setRegError(isNe ? 'कृपया गुरुहरूको आचारसंहिता तथा नियमहरूमा सहमति जनाउनुहोस् (I Agree चेक गर्नुहोला)।' : 'Please agree to the Astrologer Code of Conduct & Terms of Service.');
+      return;
+    }
 
     const newId = 'guru-' + Date.now();
     const newGuru: GuruProfile = {
@@ -484,12 +603,38 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
   const sendChatMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || !selectedGuru) return;
-    const userMsg = {
-      sender: 'user' as const,
+
+    const isGuru = myGuruId === selectedGuru.id;
+
+    if (!isGuru) {
+      const wordCount = chatInput.trim().split(/\s+/).filter(Boolean).length;
+      if (wordCount > 500) {
+        alert(isNe 
+          ? '⚠️ ग्राहकले एक सन्देशमा ५०० शब्दभन्दा बढी लेख्न मिल्दैन। कृपया ५०० शब्दभित्रै आफ्नो जिज्ञासा राख्नुहोला।' 
+          : 'Customers cannot write more than 500 words in a single message.');
+        return;
+      }
+
+      // Customer pays Rs 10 per message
+      const currentBalance = parseFloat(localStorage.getItem('vaidik_client_wallet_balance') || '500');
+      if (currentBalance < 10) {
+        alert(isNe 
+          ? '⚠️ च्याट सन्देश पठाउनको लागि वालेटमा पर्याप्त ब्यालेन्स (रु १०) छैन। कृपया रिचार्ज गर्नुहोस्।' 
+          : 'Insufficient wallet balance (Rs 10 required per message). Please recharge.');
+        if (onOpenWallet) onOpenWallet();
+        return;
+      }
+      localStorage.setItem('vaidik_client_wallet_balance', (currentBalance - 10).toString());
+    }
+
+    const senderRole = isGuru ? 'guru' : 'user';
+    const newMsg = {
+      sender: senderRole as 'user' | 'guru',
       text: chatInput,
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
-    setChatMessages((prev) => [...prev, userMsg]);
+
+    setChatMessages((prev) => [...prev, newMsg]);
     const txt = chatInput;
     setChatInput('');
 
@@ -499,7 +644,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
           return {
             ...g,
             chatRepliesCount: g.chatRepliesCount + 1,
-            totalEarningsRs: g.totalEarningsRs + 10,
+            totalEarningsRs: g.totalEarningsRs + 5, // Guru earns Rs 5 per message
             consultationMinutes: g.consultationMinutes + 1,
           };
         }
@@ -507,16 +652,18 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
       })
     );
 
-    setTimeout(() => {
-      const guruReply = {
-        sender: 'guru' as const,
-        text: isNe 
-          ? `तपाईंको जिज्ञासा "${txt}" को सम्बन्धमा ग्रहहरूको स्थिति अनुकूल छ। विस्तृत कुण्डली विश्लेषणका लागि जन्म समय र स्थान आवश्यक छ।`
-          : `Regarding your query "${txt}", planetary positions are favorable. A detailed chart analysis is recommended.`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-      setChatMessages((prev) => [...prev, guruReply]);
-    }, 1000);
+    if (!isGuru) {
+      setTimeout(() => {
+        const guruReply = {
+          sender: 'guru' as const,
+          text: isNe 
+            ? `तपाईंको जिज्ञासा "${txt}" को सम्बन्धमा ग्रहहरूको स्थिति अनुकूल छ। विस्तृत कुण्डली विश्लेषणका लागि जन्म समय र स्थान आवश्यक छ।`
+            : `Regarding your query "${txt}", planetary positions are favorable. A detailed chart analysis is recommended.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+        setChatMessages((prev) => [...prev, guruReply]);
+      }, 1000);
+    }
   };
 
   const formatDuration = (secs: number) => {
@@ -539,6 +686,15 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsLegalModalOpen(true)}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium px-3 py-1.5 rounded-xl transition-all text-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <Info className="w-3.5 h-3.5 text-amber-400" />
+            <span>{isNe ? 'हाम्रो बारे / कानुनी' : 'About / Legal'}</span>
+          </button>
+
           {myProfile ? (
             <button
               type="button"
@@ -562,96 +718,124 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
       </div>
 
       {/* Ultra-Compact Gurus Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {gurus.map((guru) => {
-          const isAvailable = guru.status === 'online';
-          const isBusy = guru.status === 'busy';
-          const isOffline = guru.status === 'offline';
+      <div className="max-h-[360px] overflow-y-auto pr-1 space-y-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {gurus.map((guru) => {
+            const isAvailable = guru.status === 'online';
+            const isBusy = guru.status === 'busy';
+            const isOffline = guru.status === 'offline';
 
-          return (
-            <div key={guru.id} className="bg-slate-900/90 border border-amber-600/30 rounded-xl p-3 shadow flex items-center justify-between gap-3 hover:border-amber-500 transition-all">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="relative shrink-0">
-                  <img
-                    src={guru.certificateUrl}
-                    alt={guru.name}
-                    className="w-10 h-10 rounded-full object-cover border-2 border-amber-500/80 shadow-sm"
-                  />
-                  <span 
-                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-900 ${
-                      isAvailable ? 'bg-emerald-500 animate-pulse' : isBusy ? 'bg-red-500 animate-pulse' : 'bg-slate-500'
+            return (
+              <div key={guru.id} className="bg-slate-900/90 border border-amber-600/30 rounded-xl p-3 shadow flex items-center justify-between gap-3 hover:border-amber-500 transition-all">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="relative shrink-0">
+                    <img
+                      src={guru.certificateUrl}
+                      alt={guru.name}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-amber-500/80 shadow-sm"
+                    />
+                    <span 
+                      className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-900 ${
+                        isAvailable ? 'bg-emerald-500 animate-pulse' : isBusy ? 'bg-red-500 animate-pulse' : 'bg-slate-500'
+                      }`}
+                    ></span>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="font-serif font-bold text-amber-200 text-xs truncate">{guru.name}</h3>
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold shrink-0 ${
+                        isAvailable ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
+                        isBusy ? 'bg-red-950 text-red-300 border border-red-800 animate-pulse' :
+                        'bg-slate-800 text-slate-400 border border-slate-700'
+                      }`}>
+                        {isAvailable ? 'अनलाइन' : isBusy ? 'व्यस्त' : 'अफलाइन'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">{guru.qualifications}</p>
+                    <div className="flex items-center flex-wrap gap-2 text-[10px] text-amber-400 mt-0.5">
+                      <div className="flex items-center gap-1">
+                        <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                        <span className="font-bold text-amber-200">{guru.rating || 5.0}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setRatingGuru(guru); setIsRateModalOpen(true); }}
+                        className="text-amber-400 hover:underline cursor-pointer"
+                      >
+                        {isNe ? 'रेटिङ' : 'Rate'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setReviewsGuru(guru); setIsReviewsModalOpen(true); }}
+                        className="text-emerald-400 hover:underline cursor-pointer font-medium"
+                      >
+                        {isNe ? 'समीक्षा हेर्नुहोस्' : 'Reviews'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setReportGuru(guru); setIsReportModalOpen(true); }}
+                        className="text-red-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                        title={isNe ? 'गुरुको रिपोर्ट गर्नुहोस्' : 'Report Guru'}
+                      >
+                        <Flag className="w-2.5 h-2.5" />
+                        <span>{isNe ? 'रिपोर्ट' : 'Report'}</span>
+                      </button>
+                      <span className="text-emerald-400 font-medium bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/60">
+                        अनुभव: {guru.experienceYears} वर्ष
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              {/* In-App Real Live Call & Message Action Buttons */}
+              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleInitiateInteraction(guru, 'chat')}
+                    disabled={!isAvailable}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-all ${
+                      isAvailable ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-slate-900'
                     }`}
-                  ></span>
+                    title="इन-एप प्रत्यक्ष च्याट / सन्देश (Live Chat)"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+                    <span>च्याट</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleInitiateInteraction(guru, 'audio')}
+                    disabled={!isAvailable}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-all ${
+                      isAvailable ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-slate-900'
+                    }`}
+                    title="एपभित्रै प्रत्यक्ष अडियो कल (In-App Audio Call)"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                    <span>अडियो कल</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleInitiateInteraction(guru, 'video')}
+                    disabled={!isAvailable}
+                    className={`px-2 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all shadow-sm ${
+                      isAvailable ? 'bg-amber-600 hover:bg-amber-500 text-slate-950 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-slate-900 text-slate-600'
+                    }`}
+                    title="एपभित्रै प्रत्यक्ष भिडियो कल (In-App Video Call)"
+                  >
+                    <Video className="w-3.5 h-3.5" />
+                    <span>भिडियो कल</span>
+                  </button>
                 </div>
-
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <h3 className="font-serif font-bold text-amber-200 text-xs truncate">{guru.name}</h3>
-                    <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold shrink-0 ${
-                      isAvailable ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
-                      isBusy ? 'bg-red-950 text-red-300 border border-red-800 animate-pulse' :
-                      'bg-slate-800 text-slate-400 border border-slate-700'
-                    }`}>
-                      {isAvailable ? 'अनलाइन' : isBusy ? 'व्यस्त' : 'अफलाइन'}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 truncate">{guru.qualifications} • {guru.experienceYears} वर्ष</p>
-                  <div className="flex items-center gap-1 text-[10px] text-amber-400 mt-0.5">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    <span className="font-bold text-amber-200">{guru.rating || 5.0}</span>
-                    <button
-                      type="button"
-                      onClick={() => { setRatingGuru(guru); setIsRateModalOpen(true); }}
-                      className="text-amber-400 hover:underline ml-2 cursor-pointer"
-                    >
-                      {isNe ? 'रेटिङ' : 'Rate'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Compact Action Buttons */}
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => startChat(guru)}
-                  disabled={!isAvailable}
-                  className={`p-2 rounded-lg text-[10px] font-semibold flex items-center justify-center transition-all ${
-                    isAvailable ? 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-slate-900'
-                  }`}
-                  title="Chat (रु १०)"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => startCall(guru, 'audio')}
-                  disabled={!isAvailable}
-                  className={`p-2 rounded-lg text-[10px] font-semibold flex items-center justify-center transition-all ${
-                    isAvailable ? 'bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-slate-900'
-                  }`}
-                  title="Audio (रु २५)"
-                >
-                  <Phone className="w-3.5 h-3.5 text-emerald-400" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => startCall(guru, 'video')}
-                  disabled={!isAvailable}
-                  className={`p-2 rounded-lg text-[10px] font-bold flex items-center justify-center transition-all shadow-sm ${
-                    isAvailable ? 'bg-amber-600 hover:bg-amber-500 text-slate-950 cursor-pointer' : 'opacity-40 cursor-not-allowed bg-slate-900 text-slate-600'
-                  }`}
-                  title="Video (रु ५०)"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                </button>
               </div>
             </div>
           );
         })}
       </div>
+    </div>
 
       {/* RATE GURU MODAL */}
       {isRateModalOpen && ratingGuru && (
@@ -1172,7 +1356,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
                 <div>
                   <h4 className="font-serif font-bold text-amber-200 text-sm">{selectedGuru.name}</h4>
                   <p className="text-[11px] text-emerald-400 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online (रु १० प्रति सन्देश)
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> {isNe ? 'अनलाइन (Online)' : 'Online'}
                   </p>
                 </div>
               </div>
@@ -1198,20 +1382,25 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
             </div>
 
             {/* Chat Input */}
-            <form onSubmit={sendChatMessage} className="p-3 bg-slate-800 border-t border-slate-700 flex gap-2">
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                placeholder={isNe ? 'सन्देश लेख्नुहोस् (रु १० प्रति उत्तर)...' : 'Type message...'}
-                className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
-              />
-              <button
-                type="submit"
-                className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center transition-all cursor-pointer shadow-md"
-              >
-                <Send className="w-4 h-4" />
-              </button>
+            <form onSubmit={sendChatMessage} className="p-3 bg-slate-800 border-t border-slate-700 space-y-1.5">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder={isNe ? 'सन्देश लेख्नुहोस् (ग्राहक: अधिकतम ५०० शब्द, गुरु: असीमित)...' : 'Type message...'}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  type="submit"
+                  className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center transition-all cursor-pointer shadow-md"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="text-[10px] text-slate-400 px-1 flex items-center justify-between">
+                <span>{myGuruId === selectedGuru.id ? (isNe ? '🟢 गुरु मोड: असीमित शब्दहरू' : 'Guru Mode: Unlimited words') : (isNe ? '👤 ग्राहक मोड: एक सन्देशमा अधिकतम ५०० शब्द' : 'Customer Mode: Max 500 words/msg')}</span>
+              </div>
             </form>
           </div>
         </div>
@@ -1224,7 +1413,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
             <div className="absolute top-0 right-0 w-48 h-48 bg-amber-600/10 rounded-full blur-3xl pointer-events-none"></div>
 
             <div className="relative w-28 h-28 mx-auto">
-              <div className="absolute inset-0 rounded-full bg-amber-500/20 animate-ping"></div>
+              <div className={`absolute inset-0 rounded-full ${callStatus === 'ringing' ? 'bg-amber-500/30 animate-ping' : 'bg-emerald-500/20'}`}></div>
               <img
                 src={selectedGuru.certificateUrl}
                 alt={selectedGuru.name}
@@ -1234,13 +1423,28 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
 
             <div className="space-y-2">
               <h3 className="text-xl font-serif font-bold text-amber-200">{selectedGuru.name}</h3>
-              <p className="text-xs text-emerald-400 font-medium">
-                {activeModal === 'video' ? (isNe ? 'भिडियो कल जोडिएको छ (रु ५०)' : 'Video Call Connected (Rs 50)') : (isNe ? 'अडियो कल जोडिएको छ (रु २५)' : 'Audio Call Connected (Rs 25)')}
-              </p>
-              <p className="text-lg font-mono font-bold text-amber-400">{formatDuration(callDuration)}</p>
+              {callStatus === 'ringing' ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-amber-300 font-semibold animate-pulse">
+                    {isNe ? '📞 कृपया प्रतीक्षा गर्नुहोस्...' : '📞 Please Wait...'}
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    {isNe ? 'गुरुले कल रिसिभ गरेपछि मात्र काउन्टडाउन सुरु हुनेछ।' : 'Countdown will start only after call is received.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-xs text-emerald-400 font-medium">
+                    {activeModal === 'video' 
+                      ? (isNe ? 'भिडियो कल जोडिएको छ' : 'Video Call Connected') 
+                      : (isNe ? 'अडियो कल जोडिएको छ' : 'Audio Call Connected')}
+                  </p>
+                  <p className="text-2xl font-mono font-bold text-amber-400">{formatDuration(callDuration)}</p>
+                </div>
+              )}
             </div>
 
-            {activeModal === 'video' && (
+            {activeModal === 'video' && callStatus === 'connected' && (
               <div className="bg-slate-950 border border-slate-800 rounded-2xl h-36 flex items-center justify-center relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-tr from-slate-900 to-amber-950/30 flex items-center justify-center">
                   <Video className="w-10 h-10 text-amber-500/40 animate-pulse" />
@@ -1249,14 +1453,25 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
               </div>
             )}
 
-            <div className="flex items-center justify-center gap-4 pt-4">
+            <div className="flex flex-col items-center gap-3 pt-2">
+              {callStatus === 'ringing' && (
+                <button
+                  type="button"
+                  onClick={() => setCallStatus('connected')}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-3.5 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Phone className="w-4 h-4" />
+                  <span>{isNe ? '⏳ कृपया प्रतीक्षा गर्नुहोस् (Please Wait)' : 'Please Wait'}</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setActiveModal(null)}
-                className="bg-red-600 hover:bg-red-500 text-white font-bold px-8 py-3 rounded-2xl shadow-xl transition-all text-sm flex items-center gap-2 cursor-pointer"
+                className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-2xl shadow-xl transition-all text-xs flex items-center justify-center gap-2 cursor-pointer"
               >
-                <X className="w-5 h-5" />
-                <span>{isNe ? 'कल काट्नुहोस् (End & Save Earnings)' : 'End Call'}</span>
+                <X className="w-4 h-4" />
+                <span>{isNe ? 'कल काट्नुहोस् (End Call)' : 'End Call'}</span>
               </button>
             </div>
           </div>
@@ -1359,7 +1574,35 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
                   )}
                 </div>
 
-                <div className="pt-2">
+                <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-3">
+                 <div className="flex items-center justify-between">
+                   <span className="text-xs font-bold text-amber-300">
+                     {isNe ? 'गुरुहरूको आचारसंहिता तथा नियमहरू (Code of Conduct)' : 'Astrologer Code of Conduct'}
+                   </span>
+                   <button
+                     type="button"
+                     onClick={() => setIsCodeOfConductModalOpen(true)}
+                     className="text-xs text-amber-400 hover:underline cursor-pointer font-medium"
+                   >
+                     {isNe ? 'नियमहरू पूरा हेर्नुहोस् (Read Rules)' : 'Read Full Rules'}
+                   </button>
+                 </div>
+                 <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-300">
+                   <input
+                     type="checkbox"
+                     checked={regAgreed}
+                     onChange={(e) => setRegAgreed(e.target.checked)}
+                     className="mt-0.5 rounded border-slate-700 text-amber-600 focus:ring-amber-500 bg-slate-900"
+                   />
+                   <span>
+                     {isNe 
+                       ? 'म गुरुहरूको आचारसंहिता, गोपनीयता, र सेवा नियमहरू ध्यानपूर्वक पढेर पूर्ण रूपमा सहमत छु (I Agree).' 
+                       : 'I have read and fully agree to the Code of Conduct, Privacy, and Terms of Service.'}
+                   </span>
+                 </label>
+               </div>
+
+               <div className="pt-2">
                   <button
                     type="submit"
                     className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold py-3 rounded-xl shadow-xl transition-all text-xs cursor-pointer"
@@ -1368,6 +1611,392 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language }) => {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BIRTH DETAILS MODAL BEFORE CONNECTING WITH GURU */}
+      {isBirthDetailsModalOpen && pendingGuruTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-amber-600/60 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative text-slate-100 max-h-[90vh] overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-amber-900/40">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-amber-200">
+                    {isNe ? 'गुरुलाई आफ्नो जन्म विवरण प्रदान गर्नुहोस्' : 'Provide Birth Details to Guru'}
+                  </h3>
+                  <p className="text-xs text-slate-400">चयनित गुरु: <strong className="text-amber-300">{pendingGuruTarget.name}</strong></p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsBirthDetailsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-2 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleBirthDetailsSubmit} className="space-y-4">
+              <p className="text-xs text-slate-300 bg-amber-950/30 border border-amber-600/30 p-3 rounded-xl leading-relaxed">
+                {isNe 
+                  ? 'ज्योतिषीय परामर्श वा कुण्डली विश्लेषणका लागि कृपया आफ्नो जन्म मिति (साल, महिना, गते), जन्म समय र जन्मस्थान सही रूपमा भर्नुहोस्। यो विवरण सिधै गुरुलाई पठाइनेछ।'
+                  : 'Please enter your birth date (year, month, day), time, and place name accurately for astrological consultation.'}
+              </p>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-amber-300">{isNe ? 'साल (Year) *' : 'Year *'}</label>
+                  <input
+                    type="text"
+                    required
+                    value={clientDobYear}
+                    onChange={(e) => setClientDobYear(e.target.value)}
+                    placeholder="उदा. 2050"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500 font-mono text-center"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-amber-300">{isNe ? 'महिना (Month) *' : 'Month *'}</label>
+                  <input
+                    type="text"
+                    required
+                    value={clientDobMonth}
+                    onChange={(e) => setClientDobMonth(e.target.value)}
+                    placeholder="उदा. वैशाख"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500 text-center"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-amber-300">{isNe ? 'गते (Day) *' : 'Day *'}</label>
+                  <input
+                    type="text"
+                    required
+                    value={clientDobDay}
+                    onChange={(e) => setClientDobDay(e.target.value)}
+                    placeholder="उदा. 15"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500 font-mono text-center"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-amber-300">{isNe ? 'जन्म समय (Birth Time) *' : 'Birth Time *'}</label>
+                  <input
+                    type="text"
+                    required
+                    value={clientDobTime}
+                    onChange={(e) => setClientDobTime(e.target.value)}
+                    placeholder="उदा. 10:30 AM"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-amber-300">{isNe ? 'जन्मस्थान (Birth Place Name) *' : 'Birth Place Name *'}</label>
+                  <input
+                    type="text"
+                    required
+                    value={clientDobPlace}
+                    onChange={(e) => setClientDobPlace(e.target.value)}
+                    placeholder="उदा. काठमाडौं, नेपाल"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold py-3.5 rounded-xl shadow-xl transition-all text-sm cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{isNe ? 'जन्म विवरण पेस गरी परामर्श सुरु गर्नुहोस्' : 'Submit Birth Details & Start'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW REVIEWS & RATINGS MODAL */}
+      {isReviewsModalOpen && reviewsGuru && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-amber-600/60 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative text-slate-100 max-h-[85vh] overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-amber-900/40">
+              <div className="flex items-center gap-3">
+                <img src={reviewsGuru.certificateUrl} alt={reviewsGuru.name} className="w-12 h-12 rounded-full object-cover border-2 border-amber-500 shadow" />
+                <div>
+                  <h3 className="text-lg font-serif font-bold text-amber-200">
+                    {reviewsGuru.name}
+                  </h3>
+                  <div className="flex items-center gap-2 text-xs text-amber-400 mt-0.5">
+                    <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                    <span className="font-bold text-amber-200">{reviewsGuru.rating || 5.0}</span>
+                    <span className="text-slate-400">({reviewsGuru.ratingCount || 0} {isNe ? 'समीक्षाहरू' : 'reviews'})</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReviewsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-2 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-300/80">
+                {isNe ? 'ग्राहकहरूद्वारा दिइएका रेटिङ तथा समीक्षा (All User Reviews & Ratings)' : 'All User Reviews & Ratings'}
+              </h4>
+
+              {(() => {
+                const allReviews = JSON.parse(localStorage.getItem('vaidik_guru_reviews') || '[]');
+                const guruReviews = allReviews.filter((r: any) => r.guruId === reviewsGuru.id);
+
+                if (guruReviews.length === 0) {
+                  return (
+                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-6 text-center text-slate-400 text-xs space-y-2">
+                      <Star className="w-8 h-8 text-amber-500/40 mx-auto" />
+                      <p>{isNe ? 'यस गुरुको लागि हालसम्म कुनै समीक्षा उपलब्ध छैन। पहिलो समीक्षा दिनुहोस्!' : 'No reviews available yet for this guru. Be the first to review!'}</p>
+                    </div>
+                  );
+                }
+
+                return guruReviews.map((rev: any, idx: number) => (
+                  <div key={rev.id || idx} className="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star 
+                            key={i} 
+                            className={`w-3.5 h-3.5 ${i < (rev.score || 5) ? 'fill-amber-400 text-amber-400' : 'text-slate-700'}`} 
+                          />
+                        ))}
+                        <span className="text-xs font-bold text-amber-300 ml-1.5 font-mono">{rev.score}.0</span>
+                      </div>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        {new Date(rev.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-200 leading-relaxed bg-slate-900/60 p-3 rounded-xl border border-slate-800/80">
+                      "{rev.comment || (isNe ? 'उत्कृष्ट परामर्श सेवा!' : 'Excellent consultation service!')}"
+                    </p>
+                  </div>
+                ));
+              })()}
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsReviewsModalOpen(false);
+                  setRatingGuru(reviewsGuru);
+                  setIsRateModalOpen(true);
+                }}
+                className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 py-2.5 rounded-xl text-xs transition-all shadow cursor-pointer"
+              >
+                {isNe ? '⭐ नयाँ रेटिङ दिनुहोस् (Write a Review)' : 'Write a Review'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LEGAL INFO & ABOUT US MODAL */}
+      {isLegalModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-amber-600/60 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative text-slate-100 max-h-[85vh] overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-amber-900/40">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Info className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-amber-200">
+                    {isNe ? 'हाम्रो बारे तथा कानुनी जानकारी (About Us & Legal Info)' : 'About Us & Legal Information'}
+                  </h3>
+                  <p className="text-xs text-slate-400">Vaidik Jyotish & Puja Consultation Platform</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLegalModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-2 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-300 leading-relaxed">
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400" />
+                  {isNe ? 'हाम्रो बारेमा (About Us)' : 'About Us'}
+                </h4>
+                <p>
+                  {isNe 
+                    ? 'हामी वैदिक ज्योतिष, कर्मकाण्ड, र सनातन संस्कृतिमा आधारित भरपर्दो तथा प्रमाणित परामर्श सेवा प्रदान गर्ने अग्रणी डिजिटल प्लेटफर्म हौं। यस प्लेटफर्ममार्फत देश तथा विदेशमा रहनुहुने सम्पूर्ण जिज्ञासु महानुभावहरूले नेपालका अनुभवी तथा योग्य ज्योतिषी र पण्डितहरूसँग प्रत्यक्ष कुराकानी (च्याट, अडियो तथा भिडियो कल) गर्न सक्नुहुन्छ।' 
+                    : 'We are a premier digital platform connecting seekers with certified and experienced Vedic astrologers, pandits, and spiritual guides for authentic consultations via chat, audio, and video calls.'}
+                </p>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  {isNe ? 'कानूनी तथा सम्पर्क विवरण (Legal & Contact Info)' : 'Legal & Contact Info'}
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-slate-300">
+                  <li><strong>{isNe ? 'संस्थाको नाम:' : 'Organization Name:'}</strong> Vaidik Jyotish & Puja Sewa</li>
+                  <li><strong>{isNe ? 'मुख्य कार्यालय:' : 'Head Office:'}</strong> Kathmandu, Bagmati Province, Nepal</li>
+                  <li><strong>{isNe ? 'सम्पर्क इमेल १:' : 'Contact Email 1:'}</strong> astrologyconsultant2@gmail.com</li>
+                  <li><strong>{isNe ? 'सम्पर्क इमेल २:' : 'Contact Email 2:'}</strong> guruastro130@gmail.com</li>
+                </ul>
+              </div>
+
+
+
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm flex items-center gap-2">
+                  <Flag className="w-4 h-4 text-amber-400" />
+                  {isNe ? 'गोपनीयता नीति (Privacy Policy)' : 'Privacy Policy'}
+                </h4>
+                <p>
+                  {isNe 
+                    ? 'तपाईंको जन्म विवरण (जन्म मिति, समय, स्थान) तथा भुक्तानी भौचर पूर्ण रूपमा सुरक्षित राखिन्छ र तेस्रो पक्षलाई बिक्री वा साझा गरिंदैन। सेवा सुधार र परामर्शका लागि मात्र प्रयोग गरिन्छ।' 
+                    : 'Your birth details and payment verification vouchers are stored securely and never shared with third parties.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsLegalModalOpen(false)}
+                className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-xs transition-all shadow cursor-pointer"
+              >
+                {isNe ? 'बुझियो / बन्द गर्नुहोस् (Close)' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CODE OF CONDUCT & TERMS OF SERVICE MODAL FOR GURUS */}
+      {isCodeOfConductModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-amber-600/60 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative text-slate-100 max-h-[85vh] overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-amber-900/40">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-amber-200">
+                    {isNe ? 'गुरुहरूका लागि आचारसंहिता तथा नियमहरू' : 'Terms of Service & Code of Conduct for Astrologers'}
+                  </h3>
+                  <p className="text-xs text-slate-400">Vaidik Jyotish & Puja Sewa</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCodeOfConductModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-2 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-300 leading-relaxed">
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm">
+                  १. गोपनीयता र सुरक्षा (Privacy & Confidentiality):
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-slate-300">
+                  <li>ग्राहकका सबै विवरणहरू (नाम, जन्म मिति, समय, स्थान) र च्याट/फोनमा भएका कुराकानीहरू पूर्ण रूपमा गोप्य राखिनुपर्छ।</li>
+                  <li>कुनै पनि ग्राहकको विवरण अन्य कुनै व्यक्ति, सामाजिक सञ्जाल वा बाह्य माध्यममा शेयर गर्न पाइने छैन।</li>
+                </ul>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm">
+                  २. निजी सम्पर्कमा प्रतिबन्ध (No Personal Contact Sharing):
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-slate-300">
+                  <li>गुरुहरूले ग्राहकलाई आफ्नो व्यक्तिगत फोन नम्बर, WhatsApp, Facebook, eSewa/Khalti, वा व्यक्तिगत ठेगाना माग्न वा दिन सख्त मनाही छ।</li>
+                  <li>ग्राहकलाई एप बाहिर लगेर परामर्श दिन खोजेमा वा व्यक्तिगत सम्पर्क विवरण आदान-प्रदान गरेमा प्रोफाइल स्थायी रूपमा ब्लक/सस्पेन्ड गरिनेछ।</li>
+                </ul>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm">
+                  ३. परामर्श र भविष्यवाणी सम्बन्धी नियम (Ethics & Consultation Rules):
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-slate-300">
+                  <li><strong>डर र त्रास देखाउन नपाइने:</strong> "दुर्घटना हुन्छ", "मृत्यु हुन्छ" वा "अति ठूलो सङ्कट आउँछ" जस्ता डर देखाएर ग्राहकलाई मानसिक तनाव वा त्रास दिन पाइने छैन।</li>
+                  <li><strong>अन्धविश्वास र अनैतिक उपाय:</strong> कसैलाई हानी पुर्याउने (वशीकरण, जादुटुना) जस्ता अनैतिक कार्य गर्न वा गराउन प्रोत्साहन गर्न पाइने छैन।</li>
+                  <li><strong>उपचार/रत्न बिक्री:</strong> एप बाहिरका महँगा पत्थर, बुटी, पूजा वा सामान किन्न ग्राहकलाई बाध्य पार्न पाइने छैन।</li>
+                  <li><strong>स्वास्थ्य र कानुनी परामर्श:</strong> गम्भीर स्वास्थ्य समस्या वा अदालत/कानुनी मामिलामा डाक्टरी वा कानुनी सल्लाह जस्तै दाबी गरेर ग्यारेन्टी दिन पाइने छैन।</li>
+                </ul>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm">
+                  ४. सेवा र अनलाइन उपस्थिति (Online Availability & Service Level):
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-slate-300">
+                  <li>अनलाइन बसेको बेला ग्राहकको च्याट रिक्वेस्ट आएमा तुरुन्तै (अधिकतम १-२ मिनेटभित्र) उत्तर दिनुपर्छ।</li>
+                  <li>च्याट सुरु गरेपछि ग्राहकलाई बिना कारण होल्डमा राख्न वा उत्तर नदिई छोड्न पाइने छैन।</li>
+                  <li>काम नगर्ने वा उपलब्ध नहुने समयमा अनलाइन स्टेटस अनिवार्य रूपमा 'Offline' राख्नुपर्छ।</li>
+                </ul>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm">
+                  ५. भुक्तानी, बक्सिस र रिभ्यु (Payments & Reviews):
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-slate-300">
+                  <li>परामर्श शुल्क एपको नीति अनुसार प्रति-मिनेट वा प्रति-परामर्श निर्धारण हुनेछ। <strong>(च्याटमा प्रति सन्देश रु ५, अडियो कलमा प्रति मिनेट रु १०, र भिडियो कलमा प्रति मिनेट रु १२ गुरुको वालेटमा जम्मा हुनेछ)।</strong> ग्राहकसँग थप पैसा वा बक्सिस (Tip) को माग गर्न पाइने छैन।</li>
+                  <li>ग्राहकले दिने रेटिङ र रिभ्युमा निष्पक्षता कायम गर्नुपर्छ। खराब रिभ्यु दिएबापत ग्राहकसँग विवाद वा अभद्र व्यवहार गर्न पाइने छैन।</li>
+                  <li>आफ्ना साथीभाइलाई ग्राहक बनाएर नक्कली (Fake) रेटिङ बढाउने वा ब्यालेन्स मनिप्युलेट गर्ने काम गरेमा एकाउन्ट टर्मिनेट गरिनेछ।</li>
+                </ul>
+              </div>
+
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl space-y-2">
+                <h4 className="font-serif font-bold text-amber-300 text-sm">
+                  ६. प्रमाणीकरण र कानुनी दायित्व (KYC & Liability):
+                </h4>
+                <ul className="list-disc list-inside space-y-1 text-slate-300">
+                  <li>गुरुहरूले आफ्नो सक्कली नाम, नागरिकता र ज्योतिष सम्बन्धी योग्यता/अनुभवको प्रमाण (KYC) बुझाउनुपर्नेछ।</li>
+                  <li>ज्योतिष परामर्श सम्भावना र अनुमानमा आधारित विषय भएकाले गुरुले दिएको सल्लाह वा परामर्शका कारण हुने कुनै पनि निर्णय वा परिणामको जिम्मेवारी सम्बन्धित गुरुको नै हुनेछ।</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="pt-2 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setRegAgreed(true);
+                  setIsCodeOfConductModalOpen(false);
+                }}
+                className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs transition-all shadow cursor-pointer"
+              >
+                {isNe ? 'पढेँ र सहमत छु (I Agree)' : 'I Agree & Accept'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCodeOfConductModalOpen(false)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer"
+              >
+                {isNe ? 'बन्द गर्नुहोस् (Close)' : 'Close'}
+              </button>
             </div>
           </div>
         </div>
