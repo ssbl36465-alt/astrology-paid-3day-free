@@ -1,13 +1,8 @@
 // File Name: src/components/ZegoCall.js
 import React, { useEffect, useRef, useState } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
-import { FileText, ChevronDown, ChevronUp, User, Calendar, Clock, MapPin, Sparkles } from 'lucide-react';
+import { FileText, ChevronDown, ChevronUp, User, Calendar, Clock, MapPin, Sparkles, Wallet, Timer } from 'lucide-react';
 
-/**
- * ZegoCall Component
- * Handles active Audio/Video consultation, ZegoCloud signaling invitation,
- * built-in in-room text chat, and displays client Kundali Birth Details.
- */
 export default function ZegoCall({
   appID,
   appSign,
@@ -27,6 +22,90 @@ export default function ZegoCall({
   const [initError, setInitError] = useState(null);
   const [showBirthDetailsCard, setShowBirthDetailsCard] = useState(Boolean(birthDetails));
 
+  // Dynamic rates per rules:
+  // Audio: Deduct Rs. 20/min, Astrologer gets Rs. 9/min, Platform gets Rs. 11/min
+  // Video: Deduct Rs. 25/min, Astrologer gets Rs. 12/min, Platform gets Rs. 13/min
+  const ratePerMinute = callType === 'video' ? 25 : 20;
+  const astrologerRatePerMinute = callType === 'video' ? 12 : 9;
+
+  const [seconds, setSeconds] = useState(0);
+  const [userBalance, setUserBalance] = useState(() => {
+    const stored = localStorage.getItem('vaidik_client_wallet_balance');
+    return stored !== null ? parseFloat(stored) : 500;
+  });
+
+  // Pre-call check: Ensure at least 1 minute worth of balance
+  useEffect(() => {
+    const currentBal = parseFloat(localStorage.getItem('vaidik_client_wallet_balance') || String(userBalance));
+    if (currentBal < ratePerMinute) {
+      alert(callType === 'video' ? "पर्याप्त ब्यालेन्स छैन (कम्तीमा रु २५ आवश्यक)" : "पर्याप्त ब्यालेन्स छैन (कम्तीमा रु २० आवश्यक)");
+      if (typeof onCallEnd === 'function') onCallEnd();
+    }
+  }, [callType, ratePerMinute, userBalance, onCallEnd]);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSeconds((prev) => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // Every 60 seconds (1 minute) interval deduction
+    if (seconds > 0 && seconds % 60 === 0) {
+      deductBalanceAndPayout();
+    }
+  }, [seconds]);
+
+  const deductBalanceAndPayout = async () => {
+    const currentBal = parseFloat(localStorage.getItem('vaidik_client_wallet_balance') || String(userBalance));
+    if (currentBal >= ratePerMinute) {
+      const newBalance = currentBal - ratePerMinute;
+      setUserBalance(newBalance);
+      localStorage.setItem('vaidik_client_wallet_balance', newBalance.toString());
+
+      // Update Astrologer earnings in localStorage/database
+      try {
+        const gurusData = JSON.parse(localStorage.getItem('vaidik_jyotish_gurus') || '[]');
+        const updatedGurus = gurusData.map((g) => {
+          if (calleeID && String(g.id) === String(calleeID)) {
+            return {
+              ...g,
+              totalEarningsRs: (g.totalEarningsRs || 0) + astrologerRatePerMinute,
+              consultationMinutes: (g.consultationMinutes || 0) + 1,
+            };
+          }
+          return g;
+        });
+        localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updatedGurus));
+      } catch (e) {}
+      
+      // API Call for backend synchronization
+      try {
+        await fetch('/api/wallet/deduct', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            callType,
+            deductAmount: ratePerMinute,
+            astrologerCredit: astrologerRatePerMinute,
+            astrologerId: calleeID,
+          }),
+        });
+      } catch (err) {
+        // Fallback handled locally
+      }
+    } else {
+      // Auto Disconnect when balance reaches 0 or below rate
+      alert("⚠️ तपाईंको वालेट ब्यालेन्स सकियो! (Insufficient balance)");
+      if (zegoInstanceRef.current && typeof zegoInstanceRef.current.logoutRoom === 'function') {
+        zegoInstanceRef.current.logoutRoom();
+      }
+      if (typeof onCallEnd === 'function') onCallEnd();
+    }
+  };
+
   useEffect(() => {
     let zp = null;
     let isMounted = true;
@@ -35,12 +114,11 @@ export default function ZegoCall({
       try {
         if (!containerRef.current) return;
 
-        // Resolve App ID and ServerSecret/Sign from props or environment variables
         const finalAppID = Number(
-          appID || import.meta.env?.VITE_ZEGO_APP_ID || 123456789
+          import.meta.env?.NEXT_PUBLIC_ZEGO_APP_ID || import.meta.env?.VITE_ZEGO_APP_ID || 123456789
         );
         const finalAppSign =
-          appSign ||
+          import.meta.env?.NEXT_PUBLIC_ZEGO_APP_SIGN ||
           import.meta.env?.VITE_ZEGO_APP_SIGN ||
           '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 
@@ -48,7 +126,6 @@ export default function ZegoCall({
         const safeUserName = String(userName || 'Client');
         const safeRoomID = String(roomID || `room_${Date.now()}`);
 
-        // Generate Kit Token using Zego Test token generator for frontend WebRTC
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
           finalAppID,
           finalAppSign,
@@ -57,11 +134,9 @@ export default function ZegoCall({
           safeUserName
         );
 
-        // Create ZegoUIKitPrebuilt instance
         zp = ZegoUIKitPrebuilt.create(kitToken);
         zegoInstanceRef.current = zp;
 
-        // Requirement: Setup Call Invitation Config (Signaling)
         if (typeof zp.setCallInvitationConfig === 'function') {
           zp.setCallInvitationConfig({
             enableCustomCallInvitationWaitingPage: false,
@@ -95,7 +170,6 @@ export default function ZegoCall({
           });
         }
 
-        // Send signaling invitation to Guru if this user is initiating
         if (isInitiator && calleeID && typeof zp.sendCallInvitation === 'function') {
           const invitationType =
             callType === 'video'
@@ -123,13 +197,11 @@ export default function ZegoCall({
           });
         }
 
-        // Join active consultation room
         zp.joinRoom({
           container: containerRef.current,
           scenario: {
             mode: ZegoUIKitPrebuilt.OneONoneCall || 0,
           },
-          // Requirement: Built-in In-Room Text Chat Enabled
           showTextChat: true,
           showUserList: true,
           turnOnMicrophoneWhenJoining: true,
@@ -175,7 +247,7 @@ export default function ZegoCall({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/95 backdrop-blur-md p-2 sm:p-4 animate-fadeIn">
       <div className="bg-slate-900 border border-amber-600/60 rounded-3xl w-full max-w-5xl h-[92vh] flex flex-col overflow-hidden shadow-2xl relative">
         {/* Top Header */}
-        <div className="bg-slate-950 px-4 sm:px-6 py-3 border-b border-slate-800 flex items-center justify-between">
+        <div className="bg-slate-950 px-4 sm:px-6 py-3 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-3">
             <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></div>
             <div>
@@ -189,14 +261,20 @@ export default function ZegoCall({
                   ({calleeName ? `with ${calleeName}` : 'Live Session'})
                 </span>
               </h3>
-              <p className="text-[11px] text-emerald-400 font-mono">
-                {callStatusText} • Room ID: {roomID}
+              <p className="text-[11px] text-emerald-400 font-mono flex items-center gap-2">
+                <span className="flex items-center gap-1">
+                  <Timer className="w-3 h-3" />
+                  कल समय: {Math.floor(seconds / 60)} मिनेट {seconds % 60} सेकेन्ड (दर: रु {ratePerMinute}/मिनट)
+                </span>
+                <span className="text-amber-300 font-bold flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/30">
+                  <Wallet className="w-3 h-3" />
+                  बाँकी ब्यालेन्स: रु {userBalance}
+                </span>
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Toggle Birth Details Drawer Button */}
             {birthDetails && (
               <button
                 type="button"
@@ -219,7 +297,6 @@ export default function ZegoCall({
           </div>
         </div>
 
-        {/* Client Birth Details Floating Banner (For Guru's Astrological Reference) */}
         {birthDetails && showBirthDetailsCard && (
           <div className="bg-slate-950/95 border-b border-amber-600/40 px-4 sm:px-6 py-2.5 flex items-center justify-between flex-wrap gap-2 text-xs animate-fadeIn z-10 shadow-lg">
             <div className="flex items-center gap-2 text-amber-400 font-bold">
@@ -261,7 +338,6 @@ export default function ZegoCall({
           </div>
         )}
 
-        {/* Error Notification if any */}
         {initError && (
           <div className="bg-rose-950/80 border-b border-rose-800 text-rose-200 text-xs px-4 py-2 flex items-center justify-between">
             <span>⚠️ Note: {initError}</span>
@@ -275,7 +351,6 @@ export default function ZegoCall({
           </div>
         )}
 
-        {/* Zego Prebuilt Container with In-Room Chat */}
         <div
           ref={containerRef}
           className="flex-1 w-full h-full bg-slate-950 overflow-hidden"

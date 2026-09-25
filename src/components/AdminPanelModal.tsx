@@ -1,33 +1,10 @@
+// File Name: src/components/AdminPanelModal.tsx
 import React, { useState, useEffect } from 'react';
-import { X, ShieldAlert, Key, Trash2, Smartphone, UserCheck, DollarSign, Award, Users, FileText, Image as ImageIcon, Wallet } from 'lucide-react';
+import { X, ShieldAlert, Key, Trash2, Smartphone, UserCheck, DollarSign, Award, Users, FileText, Image as ImageIcon, Wallet, Check, Ban, AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
   onClose: () => void;
-}
-
-interface GuruReport {
-  id: string;
-  name: string;
-  qualifications: string;
-  consultationMinutes: number;
-  consultationCount: number;
-  audioCallsCount: number;
-  videoCallsCount: number;
-  chatRepliesCount: number;
-  totalEarningsRs: number;
-}
-
-interface ClientBooking {
-  id: string;
-  clientName: string;
-  clientPhone: string;
-  guruId: string;
-  guruName: string;
-  serviceType: string;
-  amountPaid: number;
-  voucherUrl: string;
-  createdAt: string;
 }
 
 interface GuruApplication {
@@ -41,7 +18,7 @@ interface GuruApplication {
   phone: string;
   certificateUrl: string;
   createdAt: string;
-  status: string;
+  status: string; // 'pending' | 'approved' | 'rejected'
 }
 
 interface ClientRecharge {
@@ -52,7 +29,22 @@ interface ClientRecharge {
   paymentMethod: string;
   voucherUrl: string;
   createdAt: string;
-  status: string;
+  status: string; // 'pending' | 'approved' | 'rejected'
+}
+
+interface GuruReport {
+  id: string;
+  name: string;
+  qualifications: string;
+  consultationMinutes: number;
+  consultationCount: number;
+  audioCallsCount: number;
+  videoCallsCount: number;
+  chatRepliesCount: number;
+  totalEarningsRs: number;
+  status?: string;
+  adminStatus?: 'active' | 'banned_24h' | 'banned_permanent';
+  bannedUntil?: number | null;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClose }) => {
@@ -60,31 +52,54 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
   const [adminPass, setAdminPass] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem('jyotish_admin_auth') === 'true');
   const [activeAdminTab, setActiveAdminTab] = useState<'recharges' | 'applications' | 'gurus' | 'bookings'>('recharges');
+  
   const [gurusReport, setGurusReport] = useState<GuruReport[]>([]);
-  const [clientBookings, setClientBookings] = useState<ClientBooking[]>([]);
+  const [clientBookings, setClientBookings] = useState<any[]>([]);
   const [guruApplications, setGuruApplications] = useState<GuruApplication[]>([]);
   const [clientRecharges, setClientRecharges] = useState<ClientRecharge[]>([]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      const savedGurus = localStorage.getItem('vaidik_jyotish_gurus');
-      if (savedGurus) {
-        try { setGurusReport(JSON.parse(savedGurus)); } catch (e) { setGurusReport([]); }
-      }
-      const savedBookings = localStorage.getItem('vaidik_client_bookings');
-      if (savedBookings) {
-        try { setClientBookings(JSON.parse(savedBookings)); } catch (e) { setClientBookings([]); }
-      }
-      const savedApps = localStorage.getItem('vaidik_guru_applications');
-      if (savedApps) {
-        try { setGuruApplications(JSON.parse(savedApps)); } catch (e) { setGuruApplications([]); }
-      }
-      const savedRecharges = localStorage.getItem('vaidik_client_recharges');
-      if (savedRecharges) {
-        try { setClientRecharges(JSON.parse(savedRecharges)); } catch (e) { setClientRecharges([]); }
-      }
+    if (isAuthenticated && isOpen) {
+      loadAdminData();
     }
   }, [isAuthenticated, isOpen]);
+
+  const loadAdminData = () => {
+    const savedGurus = localStorage.getItem('vaidik_jyotish_gurus');
+    if (savedGurus) {
+      try {
+        const parsed = JSON.parse(savedGurus);
+        setGurusReport(parsed.map((g: any) => ({
+          ...g,
+          adminStatus: g.adminStatus || 'active',
+          bannedUntil: g.bannedUntil || null,
+        })));
+      } catch (e) { setGurusReport([]); }
+    } else {
+      setGurusReport([]);
+    }
+
+    const savedBookings = localStorage.getItem('vaidik_client_bookings');
+    if (savedBookings) {
+      try { setClientBookings(JSON.parse(savedBookings)); } catch (e) { setClientBookings([]); }
+    } else {
+      setClientBookings([]);
+    }
+
+    const savedApps = localStorage.getItem('vaidik_guru_applications');
+    if (savedApps) {
+      try { setGuruApplications(JSON.parse(savedApps)); } catch (e) { setGuruApplications([]); }
+    } else {
+      setGuruApplications([]);
+    }
+
+    const savedRecharges = localStorage.getItem('vaidik_client_recharges');
+    if (savedRecharges) {
+      try { setClientRecharges(JSON.parse(savedRecharges)); } catch (e) { setClientRecharges([]); }
+    } else {
+      setClientRecharges([]);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -93,8 +108,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
     if (adminPass.trim() === '2m2du6hkx9') {
       setIsAuthenticated(true);
       localStorage.setItem('jyotish_admin_auth', 'true');
+      loadAdminData();
     } else {
-      alert('गलत एडमिन कोड! (Incorrect Code)');
+      alert('गलत एडमिन कोड! (Incorrect Code: 2m2du6hkx9)');
     }
   };
 
@@ -104,21 +120,174 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
     setAdminPass('');
   };
 
-  // Reset Guru Earnings to 0 after payment
-  const handleResetEarnings = (guruId: string) => {
-    if (window.confirm('के तपाईंले यस गुरुलाई भुक्तानी गरिसक्नुभयो? कमाई शून्य (0) बनाउने?')) {
-      const updated = gurusReport.map((g) => (g.id === guruId ? { ...g, totalEarningsRs: 0, consultationMinutes: 0, audioCallsCount: 0, videoCallsCount: 0, chatRepliesCount: 0 } : g));
-      setGurusReport(updated);
-      localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updated));
-      alert('गुरुको आम्दानी सफलतापूर्वक शून्य (0) बनाइयो।');
+  // 1. ASTROLOGER APPLICATION APPROVAL / REJECTION / DELETE (With Confirmations)
+  const handleApproveGuruApp = (appId: string) => {
+    if (!window.confirm('के तपाईं यो गुरुको आवेदन स्वीकृत (Approve) गर्न चाहनुहुन्छ?')) return;
+
+    const appToApprove = guruApplications.find(a => a.id === appId);
+    if (!appToApprove) return;
+
+    const updatedApps = guruApplications.map(a => a.id === appId ? { ...a, status: 'approved' } : a);
+    setGuruApplications(updatedApps);
+    localStorage.setItem('vaidik_guru_applications', JSON.stringify(updatedApps));
+
+    const newGuruProfile = {
+      id: 'guru-' + Date.now(),
+      name: appToApprove.name,
+      age: appToApprove.age,
+      experienceYears: appToApprove.experienceYears,
+      qualifications: appToApprove.qualifications,
+      specializations: appToApprove.specializations,
+      otherDetails: appToApprove.otherDetails,
+      certificateUrl: appToApprove.certificateUrl,
+      status: 'online',
+      adminStatus: 'active',
+      bannedUntil: null,
+      rating: 5.0,
+      ratingCount: 1,
+      consultationCount: 0,
+      consultationMinutes: 0,
+      audioCallsCount: 0,
+      videoCallsCount: 0,
+      chatRepliesCount: 0,
+      totalEarningsRs: 0,
+      phone: appToApprove.phone,
+    };
+
+    const existingGurus = JSON.parse(localStorage.getItem('vaidik_jyotish_gurus') || '[]');
+    const newGurusList = [newGuruProfile, ...existingGurus];
+    localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(newGurusList));
+    setGurusReport(newGurusList);
+    window.dispatchEvent(new Event('storage'));
+
+    alert(`गुरु ${appToApprove.name} को आवेदन स्वीकृत गरियो र प्रोफाइल सार्वजनिक गरियो!`);
+  };
+
+  const handleRejectGuruApp = (appId: string) => {
+    if (!window.confirm('के तपाईं यो गुरुको आवेदन अस्वीकार (Reject) गर्न चाहनुहुन्छ?')) return;
+
+    const updatedApps = guruApplications.map(a => a.id === appId ? { ...a, status: 'rejected' } : a);
+    setGuruApplications(updatedApps);
+    localStorage.setItem('vaidik_guru_applications', JSON.stringify(updatedApps));
+    window.dispatchEvent(new Event('storage'));
+    alert('गुरु आवेदन अस्वीकार गरियो।');
+  };
+
+  const handleDeleteGuruApp = (appId: string) => {
+    if (window.confirm('के तपाईं यो आवेदन स्थायी रूपमा हटाउन (Delete) चाहनुहुन्छ?')) {
+      const updatedApps = guruApplications.filter(a => a.id !== appId);
+      setGuruApplications(updatedApps);
+      localStorage.setItem('vaidik_guru_applications', JSON.stringify(updatedApps));
+      window.dispatchEvent(new Event('storage'));
     }
   };
 
+  // 2. GURU BAN (24H OR PERMANENT) & RE-ACCEPT
+  const handleBanGuru = (guruId: string, type: '24h' | 'permanent') => {
+    const msg = type === '24h' 
+      ? 'के तपाईं यो गुरुलाई २४ घण्टाका लागि प्रतिबन्ध (24h Ban) गर्न चाहनुहुन्छ?' 
+      : 'के तपाईं यो गुरुलाई स्थायी रूपमा प्रतिबन्ध (Permanent Ban) गर्न चाहनुहुन्छ?';
+    
+    if (window.confirm(msg)) {
+      const bannedUntilTime = type === '24h' ? Date.now() + 24 * 3600 * 1000 : null;
+      const adminStatusVal = type === '24h' ? 'banned_24h' : 'banned_permanent';
+
+      const updated = gurusReport.map(g => {
+        if (g.id === guruId) {
+          return {
+            ...g,
+            adminStatus: adminStatusVal,
+            bannedUntil: bannedUntilTime,
+            status: 'offline',
+          };
+        }
+        return g;
+      });
+
+      setGurusReport(updated);
+      localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+      alert(type === '24h' ? 'गुरु २४ घण्टाका लागि प्रतिबन्धित गरियो।' : 'गुरु स्थायी रूपमा प्रतिबन्धित गरियो।');
+    }
+  };
+
+  const handleReAcceptGuru = (guruId: string) => {
+    if (window.confirm('के तपाईं यो गुरुको प्रतिबन्ध फुकुवा गरी पुनः स्वीकृति (Re-Accept) दिन चाहनुहुन्छ?')) {
+      const updated = gurusReport.map(g => {
+        if (g.id === guruId) {
+          return {
+            ...g,
+            adminStatus: 'active',
+            bannedUntil: null,
+            status: 'online',
+          };
+        }
+        return g;
+      });
+
+      setGurusReport(updated);
+      localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+      alert('गुरुको प्रतिबन्ध फुकुवा गरियो र पुनः सक्रिय (Re-Accepted) बनाइयो!');
+    }
+  };
+
+  // 3. RECHARGE VOUCHER APPROVAL / REJECTION / DELETE (With Confirmations)
   const handleApproveRecharge = (rechargeId: string) => {
-    const updated = clientRecharges.map((r) => r.id === rechargeId ? { ...r, status: 'approved' } : r);
+    if (!window.confirm('के तपाईं यो रिचार्ज भौचर स्वीकृत (Approve) गरी ग्राहकको वालेटमा ब्यालेन्स जम्मा गर्न चाहनुहुन्छ?')) return;
+
+    const recharge = clientRecharges.find(r => r.id === rechargeId);
+    if (!recharge) return;
+
+    const updatedRecharges = clientRecharges.map(r => r.id === rechargeId ? { ...r, status: 'approved' } : r);
+    setClientRecharges(updatedRecharges);
+    localStorage.setItem('vaidik_client_recharges', JSON.stringify(updatedRecharges));
+
+    const currentBal = parseFloat(localStorage.getItem('vaidik_client_wallet_balance') || '500');
+    const newBal = currentBal + Number(recharge.amount);
+    localStorage.setItem('vaidik_client_wallet_balance', newBal.toString());
+    window.dispatchEvent(new Event('storage'));
+
+    alert(`ग्राहक ${recharge.clientName} को वालेटमा रु ${recharge.amount} सफलतापूर्वक जम्मा गरियो!`);
+  };
+
+  const handleRejectRecharge = (rechargeId: string) => {
+    if (!window.confirm('के तपाईं यो रिचार्ज भौचर अस्वीकार (Reject) गर्न चाहनुहुन्छ?')) return;
+
+    const updated = clientRecharges.map(r => r.id === rechargeId ? { ...r, status: 'rejected' } : r);
     setClientRecharges(updated);
     localStorage.setItem('vaidik_client_recharges', JSON.stringify(updated));
-    alert('ग्राहकको रिचार्ज भौचर प्रमाणित तथा स्वीकृत गरियो।');
+    window.dispatchEvent(new Event('storage'));
+    alert('रिचार्ज भौचर अस्वीकार गरियो।');
+  };
+
+  const handleDeleteRecharge = (rechargeId: string) => {
+    if (window.confirm('के तपाईं यो रिचार्ज रेकर्ड स्थायी रूपमा मेटाउन (Delete) चाहनुहुन्छ?')) {
+      const updated = clientRecharges.filter(r => r.id !== rechargeId);
+      setClientRecharges(updated);
+      localStorage.setItem('vaidik_client_recharges', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+    }
+  };
+
+  // 4. BOOKING DELETE
+  const handleDeleteBooking = (bookingId: string) => {
+    if (window.confirm('के तपाईं यो बुकिङ रेकर्ड स्थायी रूपमा मेटाउन (Delete) चाहनुहुन्छ?')) {
+      const updated = clientBookings.filter(b => b.id !== bookingId);
+      setClientBookings(updated);
+      localStorage.setItem('vaidik_client_bookings', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+    }
+  };
+
+  const handleResetEarnings = (guruId: string) => {
+    if (window.confirm('के तपाईंले यस गुरुलाई भुक्तानी गरिसक्नुभयो? कमाई शून्य (0) बनाउन चाहनुहुन्छ?')) {
+      const updated = gurusReport.map((g) => (g.id === guruId ? { ...g, totalEarningsRs: 0, consultationMinutes: 0, audioCallsCount: 0, videoCallsCount: 0, chatRepliesCount: 0 } : g));
+      setGurusReport(updated);
+      localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updated));
+      window.dispatchEvent(new Event('storage'));
+      alert('गुरुको आम्दानी सफलतापूर्वक शून्य (0) बनाइयो।');
+    }
   };
 
   return (
@@ -140,7 +309,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
               प्रशासक (Admin) लगइन
             </h3>
             <p className="text-xs text-slate-300">
-              ग्राहक रिचार्ज, गुरु आवेदन, कमाई तथा बुकिङ भौचर व्यवस्थापन गर्न एडमिन कोड प्रविष्ट गर्नुहोस्। (कोड: <code className="text-amber-300 font-mono">2m2du6hkx9</code>)
+              गुरु आवेदन स्वीकृति, प्रतिबन्ध (24h/Permanent), रिचार्ज र वित्तीय लग व्यवस्थापन गर्न एडमिन कोड प्रविष्ट गर्नुहोस्। (कोड: <code className="text-amber-300 font-mono">2m2du6hkx9</code>)
             </p>
 
             <form onSubmit={handleLogin} className="space-y-4 pt-2">
@@ -167,7 +336,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                   <Key className="w-5 h-5 text-amber-400" /> एडमिन नियन्त्रण तथा रिपोर्ट प्यानल
                 </h3>
                 <p className="text-xs text-slate-400">
-                  ग्राहक रिचार्ज भौचर, गुरु आवेदन, कमाई र बुकिङ रिपोर्ट।
+                  गुरु प्रतिबन्ध (24h/Permanent), पुनः स्वीकृति (Re-Accept), रिचार्ज भौचर र कमाई व्यवस्थापन।
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -175,7 +344,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                   type="button"
                   onClick={handleLogout}
                   className="text-xs bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 px-3 py-1.5 rounded-full transition-colors cursor-pointer"
-                  title="Lock Admin Panel"
                 >
                   लगआउट (Lock)
                 </button>
@@ -189,36 +357,37 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                 onClick={() => setActiveAdminTab('recharges')}
                 className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeAdminTab === 'recharges' ? 'bg-amber-600 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
               >
-                💳 ग्राहक रिचार्ज ({clientRecharges.length})
+                💳 ग्राहक रिचार्ज भौचर ({clientRecharges.length})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveAdminTab('applications')}
                 className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeAdminTab === 'applications' ? 'bg-amber-600 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
               >
-                📋 गुरु आवेदन ({guruApplications.length})
+                📋 गुरु आवेदन ({guruApplications.filter(a => a.status === 'pending' || !a.status).length} पेन्डिङ)
               </button>
               <button
                 type="button"
                 onClick={() => setActiveAdminTab('gurus')}
                 className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeAdminTab === 'gurus' ? 'bg-amber-600 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
               >
-                👥 गुरु कमाई & भुक्तानी
+                👥 गुरु प्रतिबन्ध & कमाई ({gurusReport.length})
               </button>
               <button
                 type="button"
                 onClick={() => setActiveAdminTab('bookings')}
                 className={`px-3 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${activeAdminTab === 'bookings' ? 'bg-amber-600 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
               >
-                🧾 ग्राहक बुकिङ & भौचर
+                🧾 बुकिङ रिपोर्ट ({clientBookings.length})
               </button>
             </div>
 
+            {/* TAB 1: RECHARGE VOUCHERS */}
             {activeAdminTab === 'recharges' ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-serif font-bold text-amber-200">
-                    {isNe ? 'ग्राहकहरूले वालेट रिचार्जका लागि पठाएका भौचरहरू' : 'Client Wallet Recharge Vouchers'}
+                    ग्राहक वालेट रिचार्ज भौचर प्रमाणीकरण (Wallet Recharge Approval & History Delete)
                   </h4>
                   <span className="text-xs bg-amber-950 text-amber-300 border border-amber-700 px-3 py-1 rounded-full font-mono font-semibold">
                     Total: {clientRecharges.length}
@@ -228,7 +397,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                 <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
                   {clientRecharges.length === 0 ? (
                     <div className="text-center py-8 text-slate-400 text-xs">
-                      {isNe ? 'हाल कुनै पनि ग्राहक रिचार्ज भौचर प्राप्त भएको छैन।' : 'No client recharge vouchers found.'}
+                      हाल कुनै पनि ग्राहक रिचार्ज भौचर प्राप्त भएको छैन।
                     </div>
                   ) : (
                     clientRecharges.map((r) => (
@@ -237,12 +406,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-amber-200 text-sm">{r.clientName}</span>
                             <span className="text-xs text-slate-400">({r.clientPhone})</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${r.status === 'approved' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-amber-950 text-amber-300 border border-amber-800'}`}>
-                              {r.status === 'approved' ? 'प्रमाणित (Approved)' : 'पेन्डिङ (Pending)'}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                              r.status === 'approved' 
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
+                                : r.status === 'rejected' 
+                                ? 'bg-red-950 text-red-300 border border-red-800' 
+                                : 'bg-amber-950 text-amber-300 border border-amber-800'
+                            }`}>
+                              {r.status === 'approved' ? 'स्वीकृत (Approved)' : r.status === 'rejected' ? 'अस्वीकृत (Rejected)' : 'पेन्डिङ (Pending)'}
                             </span>
                           </div>
                           <p className="text-xs text-slate-300">
-                            भुक्तानी माध्यम: <strong className="text-amber-300">{r.paymentMethod}</strong> | रकम: <strong className="text-emerald-400 font-mono">रु {r.amount}</strong>
+                            माध्यम: <strong className="text-amber-300">{r.paymentMethod}</strong> | रकम: <strong className="text-emerald-400 font-mono">रु {r.amount}</strong>
                           </p>
                           <span className="text-[10px] text-slate-500 font-mono block">
                             मिति: {new Date(r.createdAt).toLocaleString()}
@@ -255,20 +430,38 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                               href={r.voucherUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="block w-20 h-20 rounded-xl overflow-hidden border-2 border-amber-500 shadow-md hover:scale-105 transition-transform"
+                              className="block w-16 h-16 rounded-xl overflow-hidden border-2 border-amber-500 shadow-md hover:scale-105 transition-transform"
                             >
-                              <img src={r.voucherUrl} alt="Recharge Voucher" className="w-full h-full object-cover" />
+                              <img src={r.voucherUrl} alt="Voucher" className="w-full h-full object-cover" />
                             </a>
                           )}
-                          {r.status !== 'approved' && (
+                          <div className="flex flex-col gap-1.5">
+                            {r.status !== 'approved' && (
+                              <button
+                                type="button"
+                                onClick={() => handleApproveRecharge(r.id)}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <Check className="w-3.5 h-3.5" /> स्वीकृत (Approve)
+                              </button>
+                            )}
+                            {r.status !== 'rejected' && (
+                              <button
+                                type="button"
+                                onClick={() => handleRejectRecharge(r.id)}
+                                className="bg-amber-900/60 hover:bg-amber-900 text-amber-200 px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <Ban className="w-3.5 h-3.5" /> अस्वीकार (Reject)
+                              </button>
+                            )}
                             <button
                               type="button"
-                              onClick={() => handleApproveRecharge(r.id)}
-                              className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-2 rounded-xl text-xs shadow transition-all cursor-pointer whitespace-nowrap"
+                              onClick={() => handleDeleteRecharge(r.id)}
+                              className="bg-red-950/60 hover:bg-red-900 text-red-300 px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1"
                             >
-                              स्वीकृत गर्नुहोस्
+                              <Trash2 className="w-3.5 h-3.5" /> मेटाउनुहोस् (Delete)
                             </button>
-                          )}
+                          </div>
                         </div>
                       </div>
                     ))
@@ -276,20 +469,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                 </div>
               </div>
             ) : activeAdminTab === 'applications' ? (
+              /* TAB 2: GURU APPLICATIONS - Separate Independent Options for Approve, Reject, and Delete */
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-serif font-bold text-amber-200">
-                    {isNe ? 'गुरुहरूले भरेका आवेदन फारमहरू (Guru Applications)' : 'Guru Registration Applications'}
+                    नयाँ गुरु दर्ता आवेदन (अलग-अलग स्वीकृत, अस्वीकृत र मेटाउने विकल्पहरू)
                   </h4>
                   <span className="text-xs bg-amber-950 text-amber-300 border border-amber-700 px-3 py-1 rounded-full font-mono font-semibold">
-                    Total Applications: {guruApplications.length}
+                    Total: {guruApplications.length}
                   </span>
                 </div>
 
                 <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
                   {guruApplications.length === 0 ? (
                     <div className="text-center py-8 text-slate-400 text-xs">
-                      {isNe ? 'हाल कुनै पनि नयाँ गुरु आवेदन प्राप्त भएको छैन।' : 'No guru applications found.'}
+                      हाल कुनै पनि गुरु आवेदन प्राप्त भएको छैन।
                     </div>
                   ) : (
                     guruApplications.map((app) => (
@@ -298,49 +492,74 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-amber-200 text-sm">{app.name}</span>
                             <span className="text-xs text-slate-400">({app.phone})</span>
-                            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-mono">
-                              अनुभव: {app.experienceYears} वर्ष | उमेर: {app.age}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                              app.status === 'approved' 
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' 
+                                : app.status === 'rejected' 
+                                ? 'bg-red-950 text-red-300 border border-red-800' 
+                                : 'bg-amber-950 text-amber-300 border border-amber-800'
+                            }`}>
+                              {app.status === 'approved' ? 'स्वीकृत (Approved)' : app.status === 'rejected' ? 'अस्वीकृत (Rejected)' : 'पेन्डिङ (Pending)'}
                             </span>
                           </div>
                           <p className="text-xs text-slate-300">
-                            योग्यता: <strong className="text-amber-300">{app.qualifications}</strong>
+                            योग्यता: <strong className="text-amber-300">{app.qualifications}</strong> ({app.experienceYears} वर्ष अनुभव)
                           </p>
                           <p className="text-xs text-slate-300">
                             विशेषज्ञता: <strong className="text-slate-200">{app.specializations?.join(', ')}</strong>
                           </p>
-                          <p className="text-xs text-slate-400 italic">
-                            थप विवरण: {app.otherDetails}
-                          </p>
-                          <span className="text-[10px] text-slate-500 font-mono block">
-                            आवेदन मिति: {new Date(app.createdAt).toLocaleString()}
-                          </span>
                         </div>
 
-                        {app.certificateUrl && (
-                          <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3">
+                          {app.certificateUrl && (
                             <a
                               href={app.certificateUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="block w-20 h-20 rounded-xl overflow-hidden border-2 border-amber-500 shadow-md hover:scale-105 transition-transform"
+                              className="block w-16 h-16 rounded-xl overflow-hidden border-2 border-amber-500 shadow-md hover:scale-105"
                             >
-                              <img src={app.certificateUrl} alt="Certificate" className="w-full h-full object-cover" />
+                              <img src={app.certificateUrl} alt="Cert" className="w-full h-full object-cover" />
                             </a>
-                            <span className="text-[11px] text-amber-300 font-semibold flex items-center gap-1">
-                              <ImageIcon className="w-4 h-4" /> प्रमाणपत्र
-                            </span>
+                          )}
+                          <div className="flex flex-col gap-1.5">
+                            {/* Separate Dedicated Buttons for Approve, Reject, and Delete */}
+                            <button
+                              type="button"
+                              onClick={() => handleApproveGuruApp(app.id)}
+                              className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs shadow cursor-pointer flex items-center gap-1"
+                              title="स्वीकृत गर्नुहोस् (Approve)"
+                            >
+                              <Check className="w-3.5 h-3.5" /> स्वीकृत (Approve)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRejectGuruApp(app.id)}
+                              className="bg-amber-900/60 hover:bg-amber-900 text-amber-200 px-3 py-1.5 rounded-xl text-xs cursor-pointer flex items-center gap-1"
+                              title="अस्वीकार गर्नुहोस् (Reject)"
+                            >
+                              <Ban className="w-3.5 h-3.5" /> अस्वीकार (Reject)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteGuruApp(app.id)}
+                              className="bg-red-950/60 hover:bg-red-900 text-red-300 px-3 py-1.5 rounded-xl text-xs cursor-pointer flex items-center gap-1"
+                              title="स्थायी रूपमा मेटाउनुहोस् (Delete)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> मेटाउनुहोस् (Delete)
+                            </button>
                           </div>
-                        )}
+                        </div>
                       </div>
                     ))
                   )}
                 </div>
               </div>
             ) : activeAdminTab === 'gurus' ? (
+              /* TAB 3: GURUS BAN & EARNINGS MANAGEMENT */
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-serif font-bold text-amber-200">
-                    {isNe ? 'सबै गुरुहरूको कमाई तथा भुक्तानी व्यवस्थापन (Reset Earnings to 0)' : 'All Gurus Earnings & Clear to 0'}
+                    गुरु प्रतिबन्ध (24h / Permanent) तथा कमाई व्यवस्थापन
                   </h4>
                   <span className="text-xs bg-emerald-950 text-emerald-300 border border-emerald-700 px-3 py-1 rounded-full font-mono font-semibold">
                     Total Gurus: {gurusReport.length}
@@ -348,56 +567,101 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                 </div>
 
                 <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
-                  {gurusReport.map((guru) => (
-                    <div key={guru.id} className="bg-slate-800/90 border border-amber-600/40 rounded-2xl p-4 space-y-3">
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 pb-2">
-                        <div>
-                          <h5 className="font-serif font-bold text-amber-200 text-sm">{guru.name}</h5>
-                          <p className="text-[11px] text-slate-400">{guru.qualifications}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <span className="text-xs text-emerald-300 font-mono font-bold block">रु {guru.totalEarningsRs || 0}</span>
-                            <span className="text-[10px] text-slate-400">कुल आम्दानी (Earnings)</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleResetEarnings(guru.id)}
-                            className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap shadow"
-                            title="Reset earnings to 0 after payment"
-                          >
-                            भुक्तानी गरियो - ० बनाउनुहोस्
-                          </button>
-                        </div>
-                      </div>
+                  {gurusReport.map((guru) => {
+                    const isBanned24h = guru.adminStatus === 'banned_24h';
+                    const isBannedPerm = guru.adminStatus === 'banned_permanent';
+                    const isRestricted = isBannedPerm || (isBanned24h && guru.bannedUntil && Date.now() < guru.bannedUntil);
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                        <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60">
-                          <span className="text-slate-400 block text-[10px]">परामर्श समय (Time)</span>
-                          <span className="font-mono font-bold text-amber-300">{guru.consultationMinutes || 0} मिनेट</span>
+                    return (
+                      <div key={guru.id} className={`border rounded-2xl p-4 space-y-3 ${isRestricted ? 'bg-red-950/30 border-red-800/60' : 'bg-slate-800/90 border-amber-600/40'}`}>
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700 pb-2">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h5 className="font-serif font-bold text-amber-200 text-sm">{guru.name}</h5>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                isBannedPerm 
+                                  ? 'bg-red-950 text-red-300 border border-red-800' 
+                                  : isBanned24h && isRestricted 
+                                  ? 'bg-amber-950 text-amber-300 border border-amber-800' 
+                                  : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                              }`}>
+                                {isBannedPerm ? '🚫 स्थायी प्रतिबन्धित (Permanent Ban)' : isBanned24h && isRestricted ? '⏳ २४ घण्टा प्रतिबन्धित (24h Ban)' : '✅ सक्रिय (Active)'}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400">{guru.qualifications} | Phone: {guru.phone || 'N/A'}</p>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Ban Options or Re-Accept Option */}
+                            {isRestricted ? (
+                              <button
+                                type="button"
+                                onClick={() => handleReAcceptGuru(guru.id)}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1 shadow"
+                                title="प्रतिबन्ध फुकुवा गरी पुनः स्वीकृति दिनुहोस्"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" /> पुनः स्वीकृति (Re-Accept)
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBanGuru(guru.id, '24h')}
+                                  className="bg-amber-900/60 hover:bg-amber-900 text-amber-200 px-2.5 py-1.5 rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1"
+                                  title="२४ घण्टा प्रतिबन्ध"
+                                >
+                                  <AlertTriangle className="w-3.5 h-3.5" /> २४ घं. प्रतिबन्ध
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleBanGuru(guru.id, 'permanent')}
+                                  className="bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 px-2.5 py-1.5 rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1"
+                                  title="स्थायी प्रतिबन्ध"
+                                >
+                                  <Ban className="w-3.5 h-3.5" /> स्थायी प्रतिबन्ध
+                                </button>
+                              </>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleResetEarnings(guru.id)}
+                              className="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer whitespace-nowrap shadow"
+                            >
+                              कमाई शून्य बनाउनुहोस् (रु {guru.totalEarningsRs || 0})
+                            </button>
+                          </div>
                         </div>
-                        <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60">
-                          <span className="text-slate-400 block text-[10px]">अडियो कल (रु २५)</span>
-                          <span className="font-mono font-bold text-slate-200">{guru.audioCallsCount || 0} पटक</span>
-                        </div>
-                        <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60">
-                          <span className="text-slate-400 block text-[10px]">भिडियो कल (रु ५०)</span>
-                          <span className="font-mono font-bold text-slate-200">{guru.videoCallsCount || 0} पटक</span>
-                        </div>
-                        <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60">
-                          <span className="text-slate-400 block text-[10px]">च्याट उत्तर (रु १०)</span>
-                          <span className="font-mono font-bold text-slate-200">{guru.chatRepliesCount || 0} वटा</span>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                          <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60">
+                            <span className="text-slate-400 block text-[10px]">परामर्श समय</span>
+                            <span className="font-mono font-bold text-amber-300">{guru.consultationMinutes || 0} मिनेट</span>
+                          </div>
+                          <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60">
+                            <span className="text-slate-400 block text-[10px]">अडियो कल</span>
+                            <span className="font-mono font-bold text-slate-200">{guru.audioCallsCount || 0} पटक</span>
+                          </div>
+                          <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60">
+                            <span className="text-slate-400 block text-[10px]">भिडियो कल</span>
+                            <span className="font-mono font-bold text-slate-200">{guru.videoCallsCount || 0} पटक</span>
+                          </div>
+                          <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-700/60">
+                            <span className="text-slate-400 block text-[10px]">च्याट उत्तर</span>
+                            <span className="font-mono font-bold text-slate-200">{guru.chatRepliesCount || 0} वटा</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ) : (
+              /* TAB 4: BOOKINGS */
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-serif font-bold text-amber-200">
-                    {isNe ? 'ग्राहकहरूले भुक्तानी गरी बुकिङ गरेका भौचर तथा विवरणहरू' : 'Client Bookings & Payment Vouchers'}
+                    ग्राहक बुकिङ तथा भुक्तानी भौचर विवरण (Bookings)
                   </h4>
                   <span className="text-xs bg-amber-950 text-amber-300 border border-amber-700 px-3 py-1 rounded-full font-mono font-semibold">
                     Total Bookings: {clientBookings.length}
@@ -407,7 +671,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                 <div className="max-h-80 overflow-y-auto space-y-3 pr-1">
                   {clientBookings.length === 0 ? (
                     <div className="text-center py-8 text-slate-400 text-xs">
-                      {isNe ? 'हाल कुनै पनि ग्राहक बुकिङ तथा भौचर प्राप्त भएको छैन।' : 'No client bookings or vouchers found.'}
+                      हाल कुनै पनि बुकिङ प्राप्त भएको छैन।
                     </div>
                   ) : (
                     clientBookings.map((b) => (
@@ -421,28 +685,30 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
                             गुरु: <strong className="text-amber-300">{b.guruName}</strong> | सेवा: <strong className="text-slate-200">{b.serviceType}</strong>
                           </p>
                           <div className="flex items-center gap-3 text-xs text-slate-400 font-mono">
-                            <span>भुक्तानी रकम: <strong className="text-emerald-400">रु {b.amountPaid}</strong></span>
+                            <span>रकम: <strong className="text-emerald-400">रु {b.amountPaid}</strong></span>
                             <span>मिति: {new Date(b.createdAt).toLocaleString()}</span>
                           </div>
                         </div>
 
-                        {b.voucherUrl ? (
-                          <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3">
+                          {b.voucherUrl && (
                             <a
                               href={b.voucherUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="block w-20 h-20 rounded-xl overflow-hidden border-2 border-amber-500 shadow-md hover:scale-105 transition-transform"
+                              className="block w-16 h-16 rounded-xl overflow-hidden border-2 border-amber-500 shadow-md hover:scale-105"
                             >
                               <img src={b.voucherUrl} alt="Voucher" className="w-full h-full object-cover" />
                             </a>
-                            <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1">
-                              <ImageIcon className="w-4 h-4" /> भौचर स्क्रिनसट
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-500 italic">भौचर छैन</span>
-                        )}
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBooking(b.id)}
+                            className="bg-red-950/60 hover:bg-red-900 text-red-300 px-3 py-1.5 rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> मेटाउनुहोस्
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}

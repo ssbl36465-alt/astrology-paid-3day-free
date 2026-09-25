@@ -119,6 +119,16 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({
       icon: <Sparkles className="w-6 h-6 text-amber-400" />,
       bg: 'bg-amber-400/10 border-amber-400/30',
       badge: 'VIP'
+    },
+    {
+      id: 'calendarConverter',
+      nameNe: 'मिति कन्भर्टर',
+      nameEn: 'Date Converter',
+      descNe: 'वि.सं. र ई.सं. मिति परिवर्तन',
+      descEn: 'BS & AD Date Conversion',
+      icon: <Calendar className="w-6 h-6 text-amber-400" />,
+      bg: 'bg-amber-500/10 border-amber-500/30',
+      badge: 'Utility'
     }
   ];
 

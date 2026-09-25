@@ -115,7 +115,6 @@ export default function App() {
     { id: 'traditionalPatrika', label: isNe ? 'चिना' : 'China', icon: <Scroll className="w-4 h-4 text-amber-400" /> },
     { id: 'interpretations', label: isNe ? 'फलित' : 'Falit', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'panchanga', label: isNe ? 'पञ्चाङ्ग' : 'Panchanga', icon: <CalendarDays className="w-4 h-4" /> },
-    { id: 'calendarConverter', label: isNe ? 'मिति कन्भर्टर' : 'Date Converter', icon: <Calendar className="w-4 h-4 text-amber-400" /> },
     { id: 'appService', label: isNe ? 'विशेष एप (300+)' : '300+ Apps', icon: <Sparkles className="w-4 h-4 text-amber-400" /> },
     { id: 'wallet', label: isNe ? 'वालेट' : 'Wallet', icon: <Wallet className="w-4 h-4 text-amber-400" /> },
   ];

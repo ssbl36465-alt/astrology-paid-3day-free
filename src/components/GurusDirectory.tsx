@@ -104,11 +104,33 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
           ...g,
           status: g.status || (g.isOnline ? 'online' : 'offline'),
           ratingCount: g.ratingCount || 10,
+          adminStatus: g.adminStatus || 'active',
+          bannedUntil: g.bannedUntil || null,
         }));
       } catch (e) { return INITIAL_GURUS; }
     }
     return INITIAL_GURUS;
   });
+
+  useEffect(() => {
+    const handleStorage = () => {
+      const saved = localStorage.getItem('vaidik_jyotish_gurus');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setGurus(parsed.map((g: any) => ({
+            ...g,
+            status: g.status || 'online',
+            ratingCount: g.ratingCount || 10,
+            adminStatus: g.adminStatus || 'active',
+            bannedUntil: g.bannedUntil || null,
+          })));
+        } catch (e) {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
 
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [isMyDashboardOpen, setIsMyDashboardOpen] = useState(false);
@@ -232,7 +254,13 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     setActiveModal(null);
   };
 
-  const checkGuruAvailable = (guru: GuruProfile) => {
+  const checkGuruAvailable = (guru: any) => {
+    const isBannedPerm = guru.adminStatus === 'banned_permanent';
+    const isBanned24h = guru.adminStatus === 'banned_24h' && guru.bannedUntil && Date.now() < guru.bannedUntil;
+    if (isBannedPerm || isBanned24h) {
+      alert(isNe ? '⚠️ यो गुरु एडमिनद्वारा प्रतिबन्धित (Banned) हुनुहुन्छ। परामर्श लिन मिल्दैन।' : 'This guru is banned by admin.');
+      return false;
+    }
     if (guru.status === 'offline') {
       alert(isNe ? 'यो गुरु हाल अफलाइन (Offline) हुनुहुन्छ। कृपया अर्को अनलाइन गुरु छान्नुहोस्।' : 'This guru is currently offline. Cannot call.');
       return false;
@@ -545,28 +573,6 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       return;
     }
 
-    const newId = 'guru-' + Date.now();
-    const newGuru: GuruProfile = {
-      id: newId,
-      name: regName,
-      age: parseInt(regAge) || 35,
-      experienceYears: parseInt(regExperience) || 5,
-      qualifications: regQualifications,
-      specializations: regSpecializations.split(',').map((s) => s.trim()).filter(Boolean),
-      otherDetails: regOtherDetails || (isNe ? 'विशेषज्ञ ज्योतिष तथा कर्मकाण्ड सेवा।' : 'Expert astrology and rituals service.'),
-      certificateUrl: regCertificateFile,
-      status: 'online',
-      rating: 5.0,
-      ratingCount: 1,
-      consultationCount: 0,
-      consultationMinutes: 0,
-      audioCallsCount: 0,
-      videoCallsCount: 0,
-      chatRepliesCount: 0,
-      totalEarningsRs: 0,
-      phone: regPhone,
-    };
-
     const newApp = {
       id: 'app-' + Date.now(),
       name: regName,
@@ -583,16 +589,11 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     const existingApps = JSON.parse(localStorage.getItem('vaidik_guru_applications') || '[]');
     localStorage.setItem('vaidik_guru_applications', JSON.stringify([newApp, ...existingApps]));
 
-    const updated = [newGuru, ...gurus];
-    setGurus(updated);
-    setMyGuruId(newId);
-    localStorage.setItem('vaidik_my_guru_id', newId);
-    setRegSuccess(isNe ? 'तपाईंको गुरु प्रोफाइल सफलतापूर्वक सिर्जना भयो!' : 'Your guru profile was successfully created!');
+    setRegSuccess(isNe ? 'तपाईंको आवेदन एडमिनसमक्ष पेस भयो! एडमिनबाट स्वीकृत भएपछि मात्र प्रोफाइल सक्रिय हुनेछ।' : 'Your application was submitted to Admin for approval.');
     setRegError('');
     setTimeout(() => {
       setIsRegisterOpen(false);
       setRegSuccess('');
-      setIsMyDashboardOpen(true);
       setRegName('');
       setRegAge('');
       setRegExperience('');
@@ -602,7 +603,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       setRegPhone('');
       setRegCertificateFile('');
       setRegAgreed(false);
-    }, 1500);
+    }, 2000);
   };
 
   const sendChatMessage = (e: React.FormEvent) => {
