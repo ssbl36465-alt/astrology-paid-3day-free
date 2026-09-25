@@ -3,7 +3,7 @@ import { BirthDetails, Language } from '../types/astrology';
 import { UI_TRANSLATIONS } from '../utils/i18n';
 import { CITY_PRESETS } from '../data/cities';
 import { convertADToBS, convertBSToAD, getDaysInBSMonth, NEPALI_MONTHS_NP, NEPALI_MONTHS_EN, formatADDateString } from '../utils/nepaliCalendar';
-import { Calendar, Clock, MapPin, Globe, Sparkles, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, MapPin, Globe, Sparkles } from 'lucide-react';
 
 interface BirthFormProps {
   language: Language;
@@ -15,8 +15,8 @@ export const BirthForm: React.FC<BirthFormProps> = ({ language, onSubmit, initia
   const t = UI_TRANSLATIONS[language];
 
   const defaultDetails: BirthDetails = initialValues || {
-    name: 'राम',
-    dob: '1995-10-24',
+    name: '',
+    dob: formatADDateString(convertBSToAD(2052, 7, 7)),
     tob: '10:30:00',
     birthPlace: 'Kathmandu, Nepal',
     latitude: 27.7172,
@@ -35,7 +35,7 @@ export const BirthForm: React.FC<BirthFormProps> = ({ language, onSubmit, initia
     return new Date(1995, 9, 24);
   };
 
-  const [dateSystem, setDateSystem] = useState<'ad' | 'bs'>('ad');
+  const [dateSystem, setDateSystem] = useState<'ad' | 'bs'>('bs');
 
   // Initial BS date calculation
   const initialAdDate = parseLocalDate(formData.dob);
@@ -152,7 +152,7 @@ export const BirthForm: React.FC<BirthFormProps> = ({ language, onSubmit, initia
             required
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="Enter full name..."
+            placeholder="आफ्नो नाम प्रविष्ट गर्नुहोस (Enter your full name)"
             className="w-full bg-slate-800/80 border border-slate-700 focus:border-amber-500 text-slate-100 rounded-xl px-3.5 py-2.5 text-sm outline-none transition-all focus:ring-1 focus:ring-amber-500/50"
           />
         </div>
@@ -168,15 +168,6 @@ export const BirthForm: React.FC<BirthFormProps> = ({ language, onSubmit, initia
               <div className="flex bg-slate-950 rounded-lg p-0.5 border border-slate-800 text-[10px]">
                 <button
                   type="button"
-                  onClick={() => setDateSystem('ad')}
-                  className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
-                    dateSystem === 'ad' ? 'bg-amber-600 text-slate-950' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  AD
-                </button>
-                <button
-                  type="button"
                   onClick={() => setDateSystem('bs')}
                   className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
                     dateSystem === 'bs' ? 'bg-amber-600 text-slate-950' : 'text-slate-400 hover:text-slate-200'
@@ -184,10 +175,51 @@ export const BirthForm: React.FC<BirthFormProps> = ({ language, onSubmit, initia
                 >
                   BS (विक्रम संवत्)
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDateSystem('ad')}
+                  className={`px-2 py-0.5 rounded font-bold transition-all cursor-pointer ${
+                    dateSystem === 'ad' ? 'bg-amber-600 text-slate-950' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  AD
+                </button>
               </div>
             </div>
 
-            {dateSystem === 'ad' ? (
+            {dateSystem === 'bs' ? (
+              <div className="flex flex-row gap-2 w-full">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="2052"
+                  maxLength={4}
+                  value={bsYear}
+                  onChange={(e) => handleBsChange(parseInt(e.target.value.replace(/\D/g, ''), 10) || 2052, bsMonth, bsDay)}
+                  className="flex-1 min-w-[100px] bg-slate-800 border border-slate-600 focus:border-amber-500 text-slate-100 rounded-xl px-3 py-2 text-base font-mono font-bold text-center outline-none shadow-inner"
+                />
+                <select
+                  value={bsMonth}
+                  onChange={(e) => handleBsChange(bsYear, parseInt(e.target.value, 10) || 1, bsDay)}
+                  className="flex-1 min-w-[100px] bg-slate-800 border border-slate-600 focus:border-amber-500 text-slate-100 rounded-xl px-3 py-2 text-base font-semibold outline-none shadow-inner"
+                >
+                  {NEPALI_MONTHS_EN.map((mName, idx) => (
+                    <option key={idx} value={idx + 1}>
+                      {idx + 1}. {NEPALI_MONTHS_NP[idx]} ({mName})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="07"
+                  maxLength={2}
+                  value={bsDay}
+                  onChange={(e) => handleBsChange(bsYear, bsMonth, parseInt(e.target.value.replace(/\D/g, ''), 10) || 1)}
+                  className="flex-1 min-w-[100px] bg-slate-800 border border-slate-600 focus:border-amber-500 text-slate-100 rounded-xl px-3 py-2 text-base font-mono font-bold text-center outline-none shadow-inner"
+                />
+              </div>
+            ) : (
               <input
                 type="date"
                 required
@@ -195,38 +227,6 @@ export const BirthForm: React.FC<BirthFormProps> = ({ language, onSubmit, initia
                 onChange={(e) => handleAdChange(e.target.value)}
                 className="w-full bg-slate-800/80 border border-slate-700 focus:border-amber-500 text-slate-100 rounded-xl px-3.5 py-2.5 text-sm outline-none transition-all focus:ring-1 focus:ring-amber-500/50"
               />
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                <input
-                  type="number"
-                  placeholder="Year (e.g. 2052)"
-                  min="1970"
-                  max="2100"
-                  value={bsYear}
-                  onChange={(e) => handleBsChange(parseInt(e.target.value) || 2080, bsMonth, bsDay)}
-                  className="bg-slate-800/80 border border-slate-700 focus:border-amber-500 text-slate-100 rounded-xl px-2.5 py-2.5 text-xs outline-none"
-                />
-                <select
-                  value={bsMonth}
-                  onChange={(e) => handleBsChange(bsYear, parseInt(e.target.value) || 1, bsDay)}
-                  className="bg-slate-800/80 border border-slate-700 focus:border-amber-500 text-slate-100 rounded-xl px-2 py-2.5 text-xs outline-none"
-                >
-                  {NEPALI_MONTHS_EN.map((mName, idx) => (
-                    <option key={idx} value={idx + 1}>
-                      {idx + 1}. {mName} ({NEPALI_MONTHS_NP[idx]})
-                    </option>
-                  ))}
-                </select>
-                <input
-                  type="number"
-                  placeholder="Day"
-                  min="1"
-                  max={getDaysInBSMonth(bsYear, bsMonth - 1)}
-                  value={bsDay}
-                  onChange={(e) => handleBsChange(bsYear, bsMonth, parseInt(e.target.value) || 1)}
-                  className="bg-slate-800/80 border border-slate-700 focus:border-amber-500 text-slate-100 rounded-xl px-2.5 py-2.5 text-xs outline-none"
-                />
-              </div>
             )}
             <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] font-mono bg-slate-950/80 p-2 rounded-xl border border-slate-800">
               <div className="text-amber-300">
@@ -343,29 +343,6 @@ export const BirthForm: React.FC<BirthFormProps> = ({ language, onSubmit, initia
               onChange={(e) => setFormData({ ...formData, timezoneOffsetMinutes: parseInt(e.target.value, 10) || 0 })}
               className="w-full bg-slate-800/80 border border-slate-700 text-slate-100 rounded-lg px-3 py-1.5 text-xs font-mono focus:border-amber-500 outline-none"
             />
-          </div>
-        </div>
-
-        {/* DST Checkbox */}
-        <div className="flex items-center space-x-2 pt-1">
-          <input
-            type="checkbox"
-            id="dstCheck"
-            checked={formData.isDst}
-            onChange={(e) => setFormData({ ...formData, isDst: e.target.checked })}
-            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-slate-700 bg-slate-800"
-          />
-          <label htmlFor="dstCheck" className="text-xs text-slate-300 cursor-pointer">
-            {t.dst}
-          </label>
-        </div>
-
-        {/* Accuracy Warning Note */}
-        <div className="p-3 bg-amber-950/40 border border-amber-800/40 rounded-xl text-xs text-amber-300/90 flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-amber-200">{t.warningTitle}</p>
-            <p className="text-[11px] text-amber-300/80 mt-0.5">{t.warningMsg}</p>
           </div>
         </div>
 

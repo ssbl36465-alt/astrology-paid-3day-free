@@ -59,23 +59,41 @@ export const PanditShambhuAIAssistant: React.FC<PanditShambhuAIAssistantProps> =
       const lagna = isNe ? data.ascendant.signNameNe : data.ascendant.signNameEn;
       const moon = data.grahas.find(g => g.name === 'Moon');
       const moonSign = isNe ? moon?.signNameNe : moon?.signNameEn;
+      const sun = data.grahas.find(g => g.name === 'Sun');
+      const sunSign = isNe ? sun?.signNameNe : sun?.signNameEn;
 
-      if (qLower.includes('करियर') || qLower.includes('व्यापार') || qLower.includes('career') || qLower.includes('business')) {
+      if (qLower.includes('करियर') || qLower.includes('व्यापार') || qLower.includes('नौकरी') || qLower.includes('job') || qLower.includes('business') || qLower.includes('career') || qLower.includes('work')) {
         replyText = isNe
-          ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: तपाईंको लग्न '${lagna}' हो र चन्द्रमा '${moonSign}' राशीमा स्थित हुनुहुन्छ। दशम भाव (कर्म भाव) र लाभ भावको स्थिति अनुसार तपाईंले नेतृत्वदायी क्षेत्र, व्यवस्थापन, परामर्श, वा आफ्नै व्यापारमा ठूलो सफलता प्राप्त गर्न सक्नुहुन्छ। कडा मेहनत र इमानदारीले तपाईंलाई ३५ वर्षपछि विशेष उच्च पद दिलाउनेछ।`
-          : `Pandit Shambhu Prasad Lamsal's Analysis: With your Ascendant in '${lagna}' and Moon in '${moonSign}', your 10th house of career indicates strong potential in leadership, consultancy, enterprise, or administrative roles. Consistency and perseverance will bring remarkable achievements in your professional life.`;
-      } else if (qLower.includes('दशा') || qLower.includes('समय') || qLower.includes('dasha') || qLower.includes('time')) {
+          ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: तपाईंको लग्न '${lagna}' र चन्द्रमा '${moonSign}' राशीमा हुनुहुन्छ। दशम भाव (कर्म भाव) र सूर्य/शनि गोचरको प्रभाव अनुसार तपाईंले प्रशासनिक क्षेत्र, व्यवस्थापन, परामर्श सेवा (Consultancy), वा आफ्नै स्वतन्त्र व्यवसायमा असाधारण सफलता पाउन सक्नुहुन्छ। कडा मेहनत र इमानदारीले तपाईंको पेशागत जीवनमा ठूलो उन्नति गराउनेछ।`
+          : `Pandit Shambhu Prasad Lamsal's Analysis: With Ascendant in '${lagna}' and Moon in '${moonSign}', your 10th house indicates stellar potential in leadership, enterprise, management, or professional consultancy. Dedication and ethical hard work will bring immense professional success.`;
+      } else if (qLower.includes('बिहे') || qLower.includes('प्रेम') || qLower.includes('विवाह') || qLower.includes('marriage') || qLower.includes('love') || qLower.includes('spouse') || qLower.includes('relationship') || qLower.includes('vivah')) {
         replyText = isNe
-          ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: तपाईंको जन्मकालीन कुण्डलीमा ग्रहहरूको गोचर र महादशा चक्र अनुसार यो समय आत्मनिरीक्षण र धैर्य राख्ने समय हो। आगामी महिनाहरूमा विशेषगरी देवगुरु वृहस्पति र सूर्यको प्रभावले नयाँ अवसरहरू खुल्नेछन्। धैर्यतापूर्वक कर्म गर्नुहोला।`
-          : `Pandit Shambhu Prasad Lamsal's Analysis: According to your planetary dasha and transit cycle, this is a phase for focused effort and strategic planning. Favorable alignments of Jupiter and Sun in upcoming transits will open new doors of prosperity.`;
-      } else if (qLower.includes('उपाय') || qLower.includes('शान्ति') || qLower.includes('मन्त्र') || qLower.includes('remedy') || qLower.includes('mantra')) {
+          ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: सप्तम भाव (जीवनसाथी भाव) र शुक्र ग्रहको स्थिति अनुसार तपाईंको वैवाहिक जीवन र प्रेम सम्बन्धमा समझदारी र आपसी सहयोग महत्त्वपूर्ण हुन्छ। '${lagna}' लग्नको स्वभाव अनुसार धैर्य र प्रेमपूर्वक सम्बन्ध अगाडि बढाउँदा जीवनमा सुखमय पारिवारिक वातावरण प्राप्त हुन्छ।`
+          : `Pandit Shambhu Prasad Lamsal's Analysis: Examining the 7th house and Venus placement, your marital and relationship harmony thrives on mutual respect and open communication. Your '${lagna}' ascendant nature ensures deep emotional bonding when patience is practiced.`;
+      } else if (qLower.includes('धन') || qLower.includes('पैसा') || qLower.includes('आर्थिक') || qLower.includes('wealth') || qLower.includes('money') || qLower.includes('finance') || qLower.includes('dhan') || qLower.includes('profit')) {
         replyText = isNe
-          ? `पण्डित शम्भु प्रसाद लम्सालको उपाय: तपाईंको कुण्डलीको दोष निवारण तथा सकारात्मक ऊर्जा वृद्धिको लागि नियमित रूपमा सूर्योदयको समयमा सूर्य अर्घ्य दिनु, बिहानीमा इष्टदेवको पूजा गर्नु तथा 'ॐ नमः शिवाय' वा 'ॐ बृं बृहस्पतये नमः' मन्त्रको १०८ पटक जप गर्नु अत्यन्त फलदायी हुन्छ। प्रत्येक शनिबार वा बिहिबार गरिब तथा असहायलाई दान दिनुहोस्।`
-          : `Pandit Shambhu Prasad Lamsal's Remedies: To enhance positive cosmic energies and pacify malefic influences, offer water to the Sun at sunrise, perform daily meditation, and chant 'Om Namah Shivaya' or 'Om Brihaspataye Namah' 108 times daily. Acts of charity on Thursdays bring immense peace.`;
+          ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: द्वितीय (धन भाव) र एकादश (लाभ भाव) को बल अनुसार तपाईंको आर्थिक स्थिति स्थिर र प्रगतितर्फ उन्मुख छ। उचित लगानी, सुनियोजित बचत र देवगुरु वृहस्पति तथा माता लक्ष्मीको कृपाले तपाईंलाई धन-सम्पत्ति र भौतिक सुखमा वृद्धिको योग बनाइरहेको छ।`
+          : `Pandit Shambhu Prasad Lamsal's Analysis: Based on your 2nd and 11th houses, financial stability and prosperity are strongly favored through wise investments, disciplined savings, and auspicious planetary transits supporting steady wealth generation.`;
+      } else if (qLower.includes('स्वास्थ्य') || qLower.includes('रोग') || qLower.includes('health') || qLower.includes('body') || qLower.includes('fitness')) {
+        replyText = isNe
+          ? `पण्डित शम्भु प्रसाद लम्सालको सुझाव: षष्ठ भाव र लग्नेशको स्थिति अनुसार स्वास्थ्यलाई उत्तम राख्न नियमित योगाभ्यास, सन्तुलित आहार, र मानसिक शान्ति अति आवश्यक छ। सूर्य उपासना र प्राणायमले तपाईंको शरीरमा प्राणवायु र ऊर्जा सधैं उच्च राख्नेछ।`
+          : `Pandit Shambhu Prasad Lamsal's Guidance: To maintain robust health and vitality, regular yoga, balanced nutrition, and mindfulness are recommended. Solar meditation and breathing exercises will keep your physical energy high.`;
+      } else if (qLower.includes('विदेश') || qLower.includes('यात्रा') || qLower.includes('foreign') || qLower.includes('travel') || qLower.includes('abroad') || qLower.includes('visa')) {
+        replyText = isNe
+          ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: द्वादश भाव (व्यय/विदेश भाव) र भाग्य भावको गोचर अनुसार तपाईंको विदेश यात्रा वा टाढाको स्थानबाट लाभ लिने योग प्रबल छ। उचित प्रयास र कागजी प्रक्रिया मिलाएर अगाडि बढ्नुहोस्, सफलता मिल्नेछ।`
+          : `Pandit Shambhu Prasad Lamsal's Analysis: Your 12th house and relocation indicators suggest strong potential for foreign travel, higher studies abroad, or international ventures. Diligent efforts in the right direction will yield positive outcomes.`;
+      } else if (qLower.includes('पढाइ') || qLower.includes('शिक्षा') || qLower.includes('study') || qLower.includes('education') || qLower.includes('exam')) {
+        replyText = isNe
+          ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: पंचम भाव (विद्या भाव) र बुद्धिको कारक ग्रहको प्रभावले उच्च शिक्षा, अनुसन्धान र प्रतिस्पर्धात्मक परीक्षामा तपाईंलाई उत्कृष्ट सफलता दिलाउनेछ। एकाग्रता र नियमित अध्ययनमा ध्यान दिनुहोला।`
+          : `Pandit Shambhu Prasad Lamsal's Analysis: Your 5th house of intellect and education favors academic excellence, higher research, and competitive examinations. Dedicated focus and disciplined study habits will bring top honors.`;
+      } else if (qLower.includes('रत्न') || qLower.includes('रुद्राक्ष') || qLower.includes('gemstone') || qLower.includes('rudraksha') || qLower.includes('remedy') || qLower.includes('upay') || qLower.includes('मन्त्र') || qLower.includes('mantra')) {
+        replyText = isNe
+          ? `पण्डित शम्भु प्रसाद लम्सालको सुझाव: तपाईंको लग्न '${lagna}' को स्वामी ग्रहलाई बलियो बनाउन र ग्रह शान्तिको लागि पुखराज वा माणिक्य धारण गर्नु, ५मुखी वा मुखी अनुसारको रुद्राक्ष लगाउनु तथा नियमित रूपमा 'ॐ नमो भगवते वासुदेवाय' वा इष्टदेवको मन्त्र जप गर्नु अत्यन्त फलदायी हुन्छ।`
+          : `Pandit Shambhu Prasad Lamsal's Remedies: To strengthen your ascendant lord and harmonize planetary energies, wearing a favorable gemstone (consulting expert for weight), wearing authentic Rudraksha, and chanting daily mantras will bring immense peace and success.`;
       } else {
         replyText = isNe
-          ? `पण्डित शम्भु प्रसाद लम्सालको मार्गदर्शन: तपाईंको लग्न '${lagna}' र '${moonSign}' राशीको प्रभावले तपाईंलाई दृढ निश्चयी, मिलनसार र उच्च विचारयुक्त बनाएको छ। जीवनमा आइपर्ने सानातिना चुनौतीहरूलाई कर्म र आध्यात्मिक साधनाद्वारा सहजै पार गर्न सकिन्छ। नियमित ध्यान र सकारात्मक सोच राख्नुहोला।`
-          : `Pandit Shambhu Prasad Lamsal's Guidance: Your Ascendant '${lagna}' and Moon sign '${moonSign}' bless you with determination, empathy, and intuitive wisdom. Overcome temporary hurdles with dedicated effort, positive mindset, and mindfulness.`;
+          ? `पण्डित शम्भु प्रसाद लम्सालको मार्गदर्शन: तपाईंले सोध्नुभएको जिज्ञासा (${query}) को ज्योतिषीय विश्लेषण गर्दा, तपाईंको लग्न '${lagna}' र '${moonSign}' राशीको प्रभावले जीवनमा ठूला उपलब्धि हासिल गर्ने दृढ क्षमता दिएको छ। आउने समयमा सकारात्मक सोच, इमानदार प्रयास र आध्यात्मिक चिन्तनद्वारा तपाईंले आफ्ना सबै लक्ष्यहरू सहजै पूरा गर्नुहुनेछ। कुनै विशेष प्रश्न वा पूजा/दोष निवारण बारे जान्न चाहनुहुन्छ भने खुलेर सोध्नुहोला।`
+          : `Pandit Shambhu Prasad Lamsal's Guidance: Regarding your inquiry (${query}), based on your '${lagna}' ascendant and '${moonSign}' Moon sign, your chart carries strong resilience and potential for success. With positive intent, persistent effort, and mindfulness, you will overcome all obstacles. Feel free to ask any further specific questions about your chart, dashas, or remedies!`;
       }
 
       setMessages((prev) => [

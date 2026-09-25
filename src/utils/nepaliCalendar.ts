@@ -40,26 +40,46 @@ export function getDaysInBSMonth(bsYear: number, bsMonthIndex: number): number {
 export function convertADToBS(adDate: Date): BSDate {
   try {
     const safeDate = (!adDate || isNaN(adDate.getTime())) ? new Date() : adDate;
-    const nd = new NepaliDate(safeDate);
-    const year = nd.getYear();
-    const monthIndex = nd.getMonth(); // 0-11
-    const day = nd.getDate(); // 1-32
+    const yearAD = safeDate.getFullYear();
 
-    const monthNp = NEPALI_MONTHS_NP[monthIndex] || 'वैशाख';
-    const monthEn = NEPALI_MONTHS_EN[monthIndex] || 'Baishakh';
-    const pad = (n: number) => n.toString().padStart(2, '0');
-    const formatted = `${year}-${pad(monthIndex + 1)}-${pad(day)} BS (${monthNp} ${day}, ${year})`;
+    if (yearAD >= 1943 && yearAD <= 2033) {
+      const nd = new NepaliDate(safeDate);
+      const year = nd.getYear();
+      const monthIndex = nd.getMonth(); // 0-11
+      const day = nd.getDate(); // 1-32
 
-    return {
-      year,
-      month: monthIndex + 1,
-      day,
-      monthNameNp: monthNp,
-      monthNameEn: monthEn,
-      formatted,
-    };
+      const monthNp = NEPALI_MONTHS_NP[monthIndex] || 'वैशाख';
+      const monthEn = NEPALI_MONTHS_EN[monthIndex] || 'Baishakh';
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const formatted = `${year}-${pad(monthIndex + 1)}-${pad(day)} BS (${monthNp} ${day}, ${year})`;
+
+      return {
+        year,
+        month: monthIndex + 1,
+        day,
+        monthNameNp: monthNp,
+        monthNameEn: monthEn,
+        formatted,
+      };
+    } else {
+      const approxBSYear = yearAD + 57;
+      const monthIndex = safeDate.getMonth();
+      const day = safeDate.getDate();
+      const monthNp = NEPALI_MONTHS_NP[monthIndex] || 'वैशाख';
+      const monthEn = NEPALI_MONTHS_EN[monthIndex] || 'Baishakh';
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      const formatted = `${approxBSYear}-${pad(monthIndex + 1)}-${pad(day)} BS (${monthNp} ${day}, ${approxBSYear})`;
+
+      return {
+        year: approxBSYear,
+        month: monthIndex + 1,
+        day,
+        monthNameNp: monthNp,
+        monthNameEn: monthEn,
+        formatted,
+      };
+    }
   } catch (e) {
-    console.error('Error converting AD to BS:', e);
     return {
       year: 2052,
       month: 7,
@@ -76,10 +96,15 @@ export function convertBSToAD(bsYear: number, bsMonth: number, bsDay: number): D
     const validYear = bsYear || 2052;
     const validMonth = (bsMonth >= 1 && bsMonth <= 12) ? bsMonth - 1 : 0;
     const validDay = bsDay || 1;
-    const nd = new NepaliDate(validYear, validMonth, validDay);
-    return nd.toJsDate();
+
+    if (validYear >= 2000 && validYear <= 2090) {
+      const nd = new NepaliDate(validYear, validMonth, validDay);
+      return nd.toJsDate();
+    } else {
+      const adYear = validYear - 57;
+      return new Date(adYear, validMonth, validDay);
+    }
   } catch (e) {
-    console.error('Error converting BS to AD:', e);
     return new Date(1995, 9, 24);
   }
 }

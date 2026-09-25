@@ -18,11 +18,8 @@ export const DashaAccordion: React.FC<DashaAccordionProps> = ({
 }) => {
   const isNe = language === 'ne';
 
-  // Default expand active Mahadasha
-  const activeMdIdx = mahadashas.findIndex((m) => m.isCurrent);
-  const [expandedMdIndex, setExpandedMdIndex] = useState<number | null>(
-    activeMdIdx !== -1 ? activeMdIdx : 0
-  );
+  // Do not expand any Mahadasha by default; show only Mul Dasa list until clicked
+  const [expandedMdIndex, setExpandedMdIndex] = useState<number | null>(null);
 
   // Expanded Antardasha key format: `${mdIdx}-${adIdx}`
   const [expandedAdKey, setExpandedAdKey] = useState<string | null>(null);
