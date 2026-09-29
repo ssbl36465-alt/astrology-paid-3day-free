@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "guru": {
+      "title": "Guru Profile",
+      "description": "Public astrologer profile visible in directory across devices",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "age": { "type": "number" },
+        "experienceYears": { "type": "number" },
+        "qualifications": { "type": "string" },
+        "specializations": { "type": "array" },
+        "otherDetails": { "type": "string" },
+        "certificateUrl": { "type": "string" },
+        "status": { "type": "string" },
+        "rating": { "type": "number" },
+        "ratingCount": { "type": "number" },
+        "consultationCount": { "type": "number" },
+        "consultationMinutes": { "type": "number" },
+        "audioCallsCount": { "type": "number" },
+        "videoCallsCount": { "type": "number" },
+        "chatRepliesCount": { "type": "number" },
+        "totalEarningsRs": { "type": "number" },
+        "phone": { "type": "string" },
+        "adminStatus": { "type": "string" }
+      },
+      "required": ["id", "name", "status"]
+    },
+    "guru_application": {
+      "title": "Guru Application",
+      "description": "Application submitted for astrologer onboarding",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "age": { "type": "number" },
+        "experienceYears": { "type": "number" },
+        "qualifications": { "type": "string" },
+        "specializations": { "type": "array" },
+        "otherDetails": { "type": "string" },
+        "phone": { "type": "string" },
+        "certificateUrl": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "status"]
+    },
+    "client_booking": {
+      "title": "Client Booking",
+      "description": "Client consultation booking record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "guruId": { "type": "string" },
+        "guruName": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "serviceType": { "type": "string" },
+        "amount": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "guruId", "clientName", "status"]
+    },
+    "client_recharge": {
+      "title": "Client Wallet Recharge",
+      "description": "Client wallet top-up request with voucher",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientPhone": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "voucherUrl": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "clientName", "amount", "status"]
+    },
+    "user": {
+      "title": "User Profile & Role",
+      "description": "User account role record",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "role": { "type": "string" },
+        "guruId": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["role"]
+    }
+  },
+  "firestore": {
+    "/gurus/{guruId}": {
+      "schema": { "$ref": "#/entities/guru" },
+      "description": "All public and approved astrologer profiles"
+    },
+    "/guru_applications/{appId}": {
+      "schema": { "$ref": "#/entities/guru_application" },
+      "description": "Guru registration applications waiting for approval or processed"
+    },
+    "/client_bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/client_booking" },
+      "description": "User consultation bookings"
+    },
+    "/client_recharges/{rechargeId}": {
+      "schema": { "$ref": "#/entities/client_recharge" },
+      "description": "User recharge requests"
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/user" },
+      "description": "User role documents"
+    }
+  }
+}

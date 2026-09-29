@@ -1,6 +1,21 @@
 // File Name: src/components/AdminPanelModal.tsx
 import React, { useState, useEffect } from 'react';
 import { X, ShieldAlert, Key, Trash2, Smartphone, UserCheck, DollarSign, Award, Users, FileText, Image as ImageIcon, Wallet, Check, Ban, AlertTriangle, RefreshCw } from 'lucide-react';
+import { 
+  db,
+  GURU_APPLICATIONS_COLLECTION,
+  GURUS_COLLECTION,
+  CLIENT_RECHARGES_COLLECTION,
+  CLIENT_BOOKINGS_COLLECTION,
+  saveGuruToFirestore, 
+  saveApplicationToFirestore, 
+  deleteApplicationFromFirestore,
+  saveRechargeToFirestore,
+  setUserRole,
+  syncGurusFromFirestore,
+  syncApplicationsFromFirestore 
+} from '../firebase';
+import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 
 interface AdminPanelModalProps {
   isOpen: boolean;
@@ -59,12 +74,62 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
   const [clientRecharges, setClientRecharges] = useState<ClientRecharge[]>([]);
 
   useEffect(() => {
-    if (isAuthenticated && isOpen) {
-      loadAdminData();
-    }
+    if (!isAuthenticated || !isOpen) return;
+
+    loadAdminData();
+
+    // Real-time live listener for Guru Applications directly from Firebase (/guru_applications)
+    const unsubApps = onSnapshot(collection(db, GURU_APPLICATIONS_COLLECTION), (snap) => {
+      const list: GuruApplication[] = [];
+      snap.forEach((d) => list.push({ ...(d.data() as GuruApplication), id: d.id }));
+      setGuruApplications(list);
+    }, (err) => console.warn('Realtime guru_applications sync warning:', err));
+
+    // Real-time live listener for Gurus directly from Firebase (/gurus)
+    const unsubGurus = onSnapshot(collection(db, GURUS_COLLECTION), (snap) => {
+      const list: GuruReport[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        list.push({
+          ...data,
+          id: d.id,
+          adminStatus: data.adminStatus || 'active',
+          bannedUntil: data.bannedUntil || null,
+        });
+      });
+      setGurusReport(list);
+    }, (err) => console.warn('Realtime gurus sync warning:', err));
+
+    // Real-time live listener for Recharges directly from Firebase
+    const unsubRecharges = onSnapshot(collection(db, CLIENT_RECHARGES_COLLECTION), (snap) => {
+      const list: ClientRecharge[] = [];
+      snap.forEach((d) => list.push({ ...(d.data() as ClientRecharge), id: d.id }));
+      if (list.length > 0) {
+        setClientRecharges(list);
+        localStorage.setItem('vaidik_client_recharges', JSON.stringify(list));
+      }
+    }, (err) => console.warn('Realtime recharges sync warning:', err));
+
+    // Real-time live listener for Bookings directly from Firebase
+    const unsubBookings = onSnapshot(collection(db, CLIENT_BOOKINGS_COLLECTION), (snap) => {
+      const list: any[] = [];
+      snap.forEach((d) => list.push({ ...d.data(), id: d.id }));
+      if (list.length > 0) {
+        setClientBookings(list);
+        localStorage.setItem('vaidik_client_bookings', JSON.stringify(list));
+      }
+    }, (err) => console.warn('Realtime bookings sync warning:', err));
+
+    return () => {
+      unsubApps();
+      unsubGurus();
+      unsubRecharges();
+      unsubBookings();
+    };
   }, [isAuthenticated, isOpen]);
 
   const loadAdminData = () => {
+    // Local data load
     const savedGurus = localStorage.getItem('vaidik_jyotish_gurus');
     if (savedGurus) {
       try {
@@ -99,6 +164,29 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
     } else {
       setClientRecharges([]);
     }
+
+    // Cloud Firestore load
+    syncGurusFromFirestore().then((remote) => {
+      if (remote && remote.length > 0) {
+        setGurusReport((prev) => {
+          const map = new Map<string, GuruReport>();
+          prev.forEach((g) => map.set(g.id, g));
+          remote.forEach((g) => map.set(g.id, { ...g, adminStatus: g.adminStatus || 'active', bannedUntil: g.bannedUntil || null }));
+          return Array.from(map.values());
+        });
+      }
+    });
+
+    syncApplicationsFromFirestore().then((remoteApps) => {
+      if (remoteApps && remoteApps.length > 0) {
+        setGuruApplications((prev) => {
+          const map = new Map<string, GuruApplication>();
+          prev.forEach((a) => map.set(a.id, a));
+          remoteApps.forEach((a) => map.set(a.id, a));
+          return Array.from(map.values());
+        });
+      }
+    });
   };
 
   if (!isOpen) return null;
@@ -110,7 +198,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       localStorage.setItem('jyotish_admin_auth', 'true');
       loadAdminData();
     } else {
-      alert('गलत एडमिन कोड! (Incorrect Code: 2m2du6hkx9)');
+      alert('गलत एडमिन कोड! (Incorrect Admin Code)');
     }
   };
 
@@ -120,19 +208,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
     setAdminPass('');
   };
 
-  // 1. ASTROLOGER APPLICATION APPROVAL / REJECTION / DELETE (With Confirmations)
-  const handleApproveGuruApp = (appId: string) => {
+  // 1. ASTROLOGER APPLICATION APPROVAL / REJECTION / DELETE (Directly in Firebase)
+  const handleApproveGuruApp = async (appId: string) => {
     if (!window.confirm('के तपाईं यो गुरुको आवेदन स्वीकृत (Approve) गर्न चाहनुहुन्छ?')) return;
 
     const appToApprove = guruApplications.find(a => a.id === appId);
     if (!appToApprove) return;
 
-    const updatedApps = guruApplications.map(a => a.id === appId ? { ...a, status: 'approved' } : a);
-    setGuruApplications(updatedApps);
-    localStorage.setItem('vaidik_guru_applications', JSON.stringify(updatedApps));
+    const guruId = appToApprove.id.replace('app-', 'guru-');
 
+    // 1. Update application status to approved in Firebase /guru_applications
+    await saveApplicationToFirestore({ ...appToApprove, status: 'approved' });
+
+    // 2. Update their status to approved in Firebase under /gurus
     const newGuruProfile = {
-      id: 'guru-' + Date.now(),
+      id: guruId,
       name: appToApprove.name,
       age: appToApprove.age,
       experienceYears: appToApprove.experienceYears,
@@ -140,8 +230,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       specializations: appToApprove.specializations,
       otherDetails: appToApprove.otherDetails,
       certificateUrl: appToApprove.certificateUrl,
-      status: 'online',
-      adminStatus: 'active',
+      status: 'approved', // Status set to 'approved' in Firebase under /gurus
+      adminStatus: 'active' as const,
       bannedUntil: null,
       rating: 5.0,
       ratingCount: 1,
@@ -153,32 +243,32 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       totalEarningsRs: 0,
       phone: appToApprove.phone,
     };
+    await saveGuruToFirestore(newGuruProfile);
 
-    const existingGurus = JSON.parse(localStorage.getItem('vaidik_jyotish_gurus') || '[]');
-    const newGurusList = [newGuruProfile, ...existingGurus];
-    localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(newGurusList));
-    setGurusReport(newGurusList);
-    window.dispatchEvent(new Event('storage'));
+    // 3. Update /users/{uid}/role as guru in Firebase
+    await setUserRole(guruId, 'guru', {
+      guruId,
+      name: appToApprove.name,
+      phone: appToApprove.phone,
+      status: 'approved',
+    });
 
-    alert(`गुरु ${appToApprove.name} को आवेदन स्वीकृत गरियो र प्रोफाइल सार्वजनिक गरियो!`);
+    alert(`गुरु ${appToApprove.name} को आवेदन स्वीकृत गरियो र Firebase मा 'guru' रोल सहित प्रोफाइल सक्रिय भयो!`);
   };
 
-  const handleRejectGuruApp = (appId: string) => {
+  const handleRejectGuruApp = async (appId: string) => {
     if (!window.confirm('के तपाईं यो गुरुको आवेदन अस्वीकार (Reject) गर्न चाहनुहुन्छ?')) return;
 
-    const updatedApps = guruApplications.map(a => a.id === appId ? { ...a, status: 'rejected' } : a);
-    setGuruApplications(updatedApps);
-    localStorage.setItem('vaidik_guru_applications', JSON.stringify(updatedApps));
-    window.dispatchEvent(new Event('storage'));
+    const appToReject = guruApplications.find(a => a.id === appId);
+    if (appToReject) {
+      await saveApplicationToFirestore({ ...appToReject, status: 'rejected' });
+    }
     alert('गुरु आवेदन अस्वीकार गरियो।');
   };
 
-  const handleDeleteGuruApp = (appId: string) => {
+  const handleDeleteGuruApp = async (appId: string) => {
     if (window.confirm('के तपाईं यो आवेदन स्थायी रूपमा हटाउन (Delete) चाहनुहुन्छ?')) {
-      const updatedApps = guruApplications.filter(a => a.id !== appId);
-      setGuruApplications(updatedApps);
-      localStorage.setItem('vaidik_guru_applications', JSON.stringify(updatedApps));
-      window.dispatchEvent(new Event('storage'));
+      await deleteApplicationFromFirestore(appId);
     }
   };
 
@@ -242,6 +332,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
     const updatedRecharges = clientRecharges.map(r => r.id === rechargeId ? { ...r, status: 'approved' } : r);
     setClientRecharges(updatedRecharges);
     localStorage.setItem('vaidik_client_recharges', JSON.stringify(updatedRecharges));
+    saveRechargeToFirestore({ ...recharge, status: 'approved' });
 
     const currentBal = parseFloat(localStorage.getItem('vaidik_client_wallet_balance') || '500');
     const newBal = currentBal + Number(recharge.amount);
@@ -254,9 +345,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
   const handleRejectRecharge = (rechargeId: string) => {
     if (!window.confirm('के तपाईं यो रिचार्ज भौचर अस्वीकार (Reject) गर्न चाहनुहुन्छ?')) return;
 
+    const recharge = clientRecharges.find(r => r.id === rechargeId);
     const updated = clientRecharges.map(r => r.id === rechargeId ? { ...r, status: 'rejected' } : r);
     setClientRecharges(updated);
     localStorage.setItem('vaidik_client_recharges', JSON.stringify(updated));
+    if (recharge) {
+      saveRechargeToFirestore({ ...recharge, status: 'rejected' });
+    }
     window.dispatchEvent(new Event('storage'));
     alert('रिचार्ज भौचर अस्वीकार गरियो।');
   };
@@ -266,6 +361,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       const updated = clientRecharges.filter(r => r.id !== rechargeId);
       setClientRecharges(updated);
       localStorage.setItem('vaidik_client_recharges', JSON.stringify(updated));
+      deleteDoc(doc(db, CLIENT_RECHARGES_COLLECTION, rechargeId)).catch((e) => console.warn(e));
       window.dispatchEvent(new Event('storage'));
     }
   };
@@ -276,6 +372,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       const updated = clientBookings.filter(b => b.id !== bookingId);
       setClientBookings(updated);
       localStorage.setItem('vaidik_client_bookings', JSON.stringify(updated));
+      deleteDoc(doc(db, CLIENT_BOOKINGS_COLLECTION, bookingId)).catch((e) => console.warn(e));
       window.dispatchEvent(new Event('storage'));
     }
   };
@@ -309,7 +406,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
               प्रशासक (Admin) लगइन
             </h3>
             <p className="text-xs text-slate-300">
-              गुरु आवेदन स्वीकृति, प्रतिबन्ध (24h/Permanent), रिचार्ज र वित्तीय लग व्यवस्थापन गर्न एडमिन कोड प्रविष्ट गर्नुहोस्। (कोड: <code className="text-amber-300 font-mono">2m2du6hkx9</code>)
+              गुरु आवेदन स्वीकृति, प्रतिबन्ध (24h/Permanent), रिचार्ज र वित्तीय लग व्यवस्थापन गर्न एडमिन कोड प्रविष्ट गर्नुहोस्।
             </p>
 
             <form onSubmit={handleLogin} className="space-y-4 pt-2">

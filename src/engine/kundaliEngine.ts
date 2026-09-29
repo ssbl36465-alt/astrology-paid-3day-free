@@ -393,6 +393,33 @@ export function calculateKundali(birthDetails: BirthDetails): KundaliCalculation
     // Default fallback
   }
 
+  const RITUS = [
+    { en: 'Shishira (Winter)', ne: 'शिशिर ऋतु' },
+    { en: 'Vasanta (Spring)', ne: 'वसंत ऋतु' },
+    { en: 'Grishma (Summer)', ne: 'ग्रीष्म ऋतु' },
+    { en: 'Varsha (Monsoon)', ne: 'वर्षा ऋतु' },
+    { en: 'Sharad (Autumn)', ne: 'शरद ऋतु' },
+    { en: 'Hemanta (Pre-winter)', ne: 'हेमन्त ऋतु' },
+  ];
+  const rituIndex = Math.floor(((sunPos.siderealLongitude % 360) / 60)) % 6;
+  const currentRitu = RITUS[rituIndex];
+
+  const isUttarayan = sunPos.siderealLongitude >= 270 || sunPos.siderealLongitude < 90;
+  const ayanaEn = isUttarayan ? 'Uttarayan' : 'Dakshinayan';
+  const ayanaNe = isUttarayan ? 'उत्तरायण' : 'दक्षिणायन';
+
+  const RAHU_KAAL_MAP: Record<number, string> = {
+    0: '04:30 PM - 06:00 PM',
+    1: '07:30 AM - 09:00 AM',
+    2: '03:00 PM - 04:30 PM',
+    3: '12:00 PM - 01:30 PM',
+    4: '01:30 PM - 03:00 PM',
+    5: '10:30 AM - 12:00 PM',
+    6: '09:00 AM - 10:30 AM',
+  };
+  const rahuKaalTime = RAHU_KAAL_MAP[dayOfWeek] || '04:30 PM - 06:00 PM';
+  const abhijitTime = '11:45 AM - 12:33 PM';
+
   const panchanga: PanchangaData = {
     tithi: {
       number: tithiNum,
@@ -427,6 +454,16 @@ export function calculateKundali(birthDetails: BirthDetails): KundaliCalculation
     },
     sunrise: sunriseStr,
     sunset: sunsetStr,
+    sunSign: sunPos.signNameEn,
+    sunSignNe: sunPos.signNameNe,
+    moonSign: moonPos.signNameEn,
+    moonSignNe: moonPos.signNameNe,
+    ritu: currentRitu.en,
+    rituNe: currentRitu.ne,
+    ayana: ayanaEn,
+    ayanaNe: ayanaNe,
+    rahuKaal: rahuKaalTime,
+    abhijitMuhurta: abhijitTime,
   };
 
   // 6. Vimshottari Dasha Calculation
@@ -974,6 +1011,16 @@ export function calculateKundali(birthDetails: BirthDetails): KundaliCalculation
       },
       sunrise: '06:00:00',
       sunset: '18:00:00',
+      sunSign: 'Aries',
+      sunSignNe: 'मेष',
+      moonSign: 'Aries',
+      moonSignNe: 'मेष',
+      ritu: 'Vasanta (Spring)',
+      rituNe: 'वसंत ऋतु',
+      ayana: 'Uttarayan',
+      ayanaNe: 'उत्तरायण',
+      rahuKaal: '04:30 PM - 06:00 PM',
+      abhijitMuhurta: '11:45 AM - 12:33 PM',
     };
 
     const defaultVimshottari: VimshottariDasha = {

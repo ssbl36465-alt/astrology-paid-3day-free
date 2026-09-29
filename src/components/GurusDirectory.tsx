@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types/astrology';
 import { LiveConsultationModal } from './LiveConsultationModal';
-import { UserCheck, Award, Phone, Video, MessageSquare, Star, Check, CheckCircle, Upload, ShieldCheck, X, Send, Sparkles, AlertCircle, Clock, DollarSign, Wallet, FileText, Image as ImageIcon, Flag, Info } from 'lucide-react';
+import { UserCheck, Award, Phone, Video, MessageSquare, Star, Check, CheckCircle, Upload, ShieldCheck, X, Send, Sparkles, AlertCircle, Clock, DollarSign, Wallet, FileText, Image as ImageIcon, Flag, Info, Edit3, Camera } from 'lucide-react';
+import { 
+  db, 
+  GURUS_COLLECTION, 
+  GURU_APPLICATIONS_COLLECTION,
+  saveGuruToFirestore, 
+  saveApplicationToFirestore, 
+  saveBookingToFirestore, 
+  saveRechargeToFirestore,
+  setUserRole
+} from '../firebase';
+import { collection, doc, onSnapshot } from 'firebase/firestore';
 
 interface GuruProfile {
   id: string;
@@ -12,7 +23,8 @@ interface GuruProfile {
   specializations: string[];
   otherDetails: string;
   certificateUrl: string;
-  status: 'online' | 'offline' | 'busy';
+  status: 'approved' | 'online' | 'offline' | 'busy';
+  availability?: 'online' | 'offline' | 'busy';
   rating: number;
   ratingCount: number;
   consultationCount: number;
@@ -39,7 +51,8 @@ const INITIAL_GURUS: GuruProfile[] = [
     specializations: ['चिना तथा कुण्डली विश्लेषण', 'ग्रह शान्ति कर्मकाण्ड', 'वास्तु परामर्श'],
     otherDetails: 'विशेषतः मांगलिक दोष निवारण र रुद्राभिषेक पूजामा सिद्धहस्त।',
     certificateUrl: 'https://images.unsplash.com/photo-1516534775068-ba3e7458af70?auto=format&fit=crop&q=80&w=400',
-    status: 'online',
+    status: 'approved',
+    availability: 'online',
     rating: 4.9,
     ratingCount: 15,
     consultationCount: 45,
@@ -59,7 +72,8 @@ const INITIAL_GURUS: GuruProfile[] = [
     specializations: ['गृहप्रवेश पूजा', 'विवाह मुहूर्त', 'वास्तु दोष निवारण', 'ई-पूजा'],
     otherDetails: 'देश तथा विदेशमा अनलाइन माध्यमबाट पनि नियमित पूजा तथा परामर्श दिँदै आउनुभएको छ।',
     certificateUrl: 'https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=400',
-    status: 'busy',
+    status: 'approved',
+    availability: 'busy',
     rating: 5.0,
     ratingCount: 24,
     consultationCount: 60,
@@ -79,7 +93,8 @@ const INITIAL_GURUS: GuruProfile[] = [
     specializations: ['दशा विश्लेषण', 'व्यापारिक वास्तु', 'रत्न परामर्श', 'पुराण वाचन'],
     otherDetails: 'वैज्ञानिक तथा शास्त्रीय दृष्टिकोणबाट ज्योतिषीय समाधान प्रदान गर्नुहुन्छ।',
     certificateUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=400',
-    status: 'offline',
+    status: 'approved',
+    availability: 'offline',
     rating: 4.8,
     ratingCount: 12,
     consultationCount: 30,
@@ -94,50 +109,208 @@ const INITIAL_GURUS: GuruProfile[] = [
 
 export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpenWallet }) => {
   const isNe = language === 'ne';
-  const [gurus, setGurus] = useState<GuruProfile[]>(() => {
-    const saved = localStorage.getItem('vaidik_jyotish_gurus');
-    if (saved) {
-      try { 
-        const parsed = JSON.parse(saved);
-        // Ensure status and ratingCount exist
-        return parsed.map((g: any) => ({
-          ...g,
-          status: g.status || (g.isOnline ? 'online' : 'offline'),
-          ratingCount: g.ratingCount || 10,
-          adminStatus: g.adminStatus || 'active',
-          bannedUntil: g.bannedUntil || null,
-        }));
-      } catch (e) { return INITIAL_GURUS; }
-    }
-    return INITIAL_GURUS;
-  });
-
-  useEffect(() => {
-    const handleStorage = () => {
-      const saved = localStorage.getItem('vaidik_jyotish_gurus');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setGurus(parsed.map((g: any) => ({
-            ...g,
-            status: g.status || 'online',
-            ratingCount: g.ratingCount || 10,
-            adminStatus: g.adminStatus || 'active',
-            bannedUntil: g.bannedUntil || null,
-          })));
-        } catch (e) {}
-      }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
-
+  // Completely removing all localStorage mock data fallbacks: strictly live from Firebase
+  const [gurus, setGurus] = useState<GuruProfile[]>([]);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [isMyDashboardOpen, setIsMyDashboardOpen] = useState(false);
   const [myGuruId, setMyGuruId] = useState<string>(() => localStorage.getItem('vaidik_my_guru_id') || '');
+  const [myGuruAppId, setMyGuruAppId] = useState<string>(() => localStorage.getItem('vaidik_my_guru_app_id') || '');
+
+  useEffect(() => {
+    // Live fetching from Firebase /gurus (filtered strictly by status: 'approved')
+    let isMounted = true;
+    try {
+      const unsub = onSnapshot(collection(db, GURUS_COLLECTION), (snapshot) => {
+        if (!isMounted) return;
+        if (!snapshot.empty) {
+          const approvedList: GuruProfile[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data() as GuruProfile;
+            // Filter live from Firebase by status: 'approved'
+            if (data.status === 'approved' || (data as any).approvalStatus === 'approved') {
+              approvedList.push({
+                ...data,
+                id: docSnap.id,
+                status: 'approved',
+                availability: data.availability || (data.status === 'approved' ? 'online' : (data.status as any)) || 'online',
+                ratingCount: data.ratingCount || 1,
+              });
+            }
+          });
+          setGurus(approvedList);
+        } else {
+          // If Firebase is brand new and empty, seed verified initial gurus directly into Firebase with status: 'approved'
+          INITIAL_GURUS.forEach((g) => {
+            saveGuruToFirestore(g);
+          });
+        }
+      }, (err) => {
+        console.warn('Firestore gurus subscription warning:', err);
+      });
+
+      return () => {
+        isMounted = false;
+        unsub();
+      };
+    } catch (e) {
+      console.warn('Failed to attach Firestore listener:', e);
+    }
+  }, []);
 
   const [selectedGuru, setSelectedGuru] = useState<GuruProfile | null>(null);
   const [activeModal, setActiveModal] = useState<'chat' | 'audio' | 'video' | null>(null);
+
+  // Real-time Notification State for Guru Application Approval
+  const [approvalAlert, setApprovalAlert] = useState<{
+    show: boolean;
+    guruName: string;
+    guruId: string;
+  } | null>(null);
+
+  // Real-time listener: alerts user when their guru application changes from 'pending' to 'approved'
+  useEffect(() => {
+    if (!myGuruAppId) return;
+
+    let previousStatus = localStorage.getItem(`status_${myGuruAppId}`) || 'pending';
+
+    const unsub = onSnapshot(doc(db, GURU_APPLICATIONS_COLLECTION, myGuruAppId), (docSnap) => {
+      if (docSnap.exists()) {
+        const appData = docSnap.data();
+        const currentStatus = appData.status;
+
+        // When status transitions from 'pending' to 'approved'
+        if (currentStatus === 'approved' && previousStatus === 'pending') {
+          const guruId = appData.guruId || myGuruAppId.replace('app-', 'guru-');
+          localStorage.setItem('vaidik_my_guru_id', guruId);
+          setMyGuruId(guruId);
+          localStorage.setItem(`status_${myGuruAppId}`, 'approved');
+          previousStatus = 'approved';
+
+          setApprovalAlert({
+            show: true,
+            guruName: appData.name || 'गुरुजी',
+            guruId,
+          });
+
+          // Play subtle celebration chime using Web Audio API
+          try {
+            const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioCtx) {
+              const ctx = new AudioCtx();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.connect(gain);
+              gain.connect(ctx.destination);
+              osc.type = 'triangle';
+              osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+              osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12); // E5
+              osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.24); // G5
+              osc.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.36); // C6
+              gain.gain.setValueAtTime(0.25, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.7);
+              osc.start();
+              osc.stop(ctx.currentTime + 0.7);
+            }
+          } catch (e) {
+            // Audio context restricted or unavailable
+          }
+        } else if (currentStatus === 'approved') {
+          const guruId = appData.guruId || myGuruAppId.replace('app-', 'guru-');
+          if (!myGuruId) {
+            localStorage.setItem('vaidik_my_guru_id', guruId);
+            setMyGuruId(guruId);
+          }
+          localStorage.setItem(`status_${myGuruAppId}`, 'approved');
+        }
+      }
+    }, (err) => {
+      console.warn('Realtime application status listener error:', err);
+    });
+
+    return () => unsub();
+  }, [myGuruAppId]);
+
+  // Edit Guru Profile State
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAge, setEditAge] = useState('');
+  const [editExperience, setEditExperience] = useState('');
+  const [editQualifications, setEditQualifications] = useState('');
+  const [editSpecializations, setEditSpecializations] = useState('');
+  const [editOtherDetails, setEditOtherDetails] = useState('');
+  const [editPhotoUrl, setEditPhotoUrl] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+  const [editError, setEditError] = useState('');
+
+  const openEditProfile = () => {
+    if (!myProfile) return;
+    setEditName(myProfile.name || '');
+    setEditPhone(myProfile.phone || '');
+    setEditAge(String(myProfile.age || ''));
+    setEditExperience(String(myProfile.experienceYears || ''));
+    setEditQualifications(myProfile.qualifications || '');
+    setEditSpecializations(Array.isArray(myProfile.specializations) ? myProfile.specializations.join(', ') : '');
+    setEditOtherDetails(myProfile.otherDetails || '');
+    setEditPhotoUrl(myProfile.certificateUrl || '');
+    setEditSuccess('');
+    setEditError('');
+    setIsEditProfileOpen(true);
+  };
+
+  const handleEditPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditPhotoUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!myGuruId || !myProfile) return;
+
+    if (!editName.trim() || !editQualifications.trim()) {
+      setEditError(isNe ? 'कृपया नाम र योग्यता अनिवार्य रूपमा भर्नुहोस्।' : 'Name and qualifications are required.');
+      return;
+    }
+
+    const updatedProfile: GuruProfile = {
+      ...myProfile,
+      name: editName.trim(),
+      phone: editPhone.trim(),
+      age: parseInt(editAge) || myProfile.age || 35,
+      experienceYears: parseInt(editExperience) || myProfile.experienceYears || 5,
+      qualifications: editQualifications.trim(),
+      specializations: editSpecializations.split(',').map((s) => s.trim()).filter(Boolean),
+      otherDetails: editOtherDetails.trim(),
+      certificateUrl: editPhotoUrl || myProfile.certificateUrl,
+      status: 'approved',
+    };
+
+    // 1. Save directly to Firebase /gurus
+    await saveGuruToFirestore(updatedProfile);
+
+    // 2. Update user profile in Firebase /users
+    await setUserRole(myGuruId, 'guru', {
+      name: editName.trim(),
+      phone: editPhone.trim(),
+      guruId: myGuruId,
+      status: 'approved',
+    });
+
+    // 3. Update local state
+    setGurus((prev) => prev.map((g) => g.id === myGuruId ? updatedProfile : g));
+
+    setEditSuccess(isNe ? 'तपाईंको प्रोफाइल सफलतापूर्वक परिवर्तन भयो!' : 'Profile successfully updated!');
+    setTimeout(() => {
+      setIsEditProfileOpen(false);
+      setEditSuccess('');
+    }, 1500);
+  };
 
   // Rating Modal State
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
@@ -184,6 +357,35 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
   const [pendingGuruAction, setPendingGuruAction] = useState<'chat' | 'audio' | 'video' | null>(null);
   const [pendingGuruTarget, setPendingGuruTarget] = useState<GuruProfile | null>(null);
 
+  const [isWaitingKundaliOpen, setIsWaitingKundaliOpen] = useState(false);
+  const [waitingTimeRemaining, setWaitingTimeRemaining] = useState(120); // 2 minutes countdown
+
+  useEffect(() => {
+    let timer: any;
+    if (isWaitingKundaliOpen && waitingTimeRemaining > 0) {
+      timer = setInterval(() => {
+        setWaitingTimeRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setIsWaitingKundaliOpen(false);
+            if (pendingGuruTarget && pendingGuruAction) {
+              setSelectedGuru(pendingGuruTarget);
+              setGurus((p) => p.map((g) => g.id === pendingGuruTarget.id ? { ...g, status: 'busy' } : g));
+              if (pendingGuruAction === 'chat') {
+                setActiveModal('chat');
+              } else {
+                setActiveModal(pendingGuruAction);
+              }
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isWaitingKundaliOpen, waitingTimeRemaining, pendingGuruTarget, pendingGuruAction]);
+
   const [clientDobYear, setClientDobYear] = useState(() => localStorage.getItem('vaidik_client_dob_year') || '2050');
   const [clientDobMonth, setClientDobMonth] = useState(() => localStorage.getItem('vaidik_client_dob_month') || 'वैशाख');
   const [clientDobDay, setClientDobDay] = useState(() => localStorage.getItem('vaidik_client_dob_day') || '15');
@@ -208,10 +410,6 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
   const [chatMessages, setChatMessages] = useState<{ sender: 'user' | 'guru'; text: string; time: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
 
-  useEffect(() => {
-    localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(gurus));
-  }, [gurus]);
-
   const handleEndConsultation = (durationSeconds: number, wasConnected: boolean) => {
     if (selectedGuru) {
       if (wasConnected && durationSeconds > 0) {
@@ -231,23 +429,32 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
               const newVideoCount = !isAudio ? g.videoCallsCount + 1 : g.videoCallsCount;
               const newMinutes = g.consultationMinutes + minutesSpent;
               const newEarnings = g.totalEarningsRs + earningsAdd;
-              return {
+              const updated = {
                 ...g,
-                status: 'online', // set back to online after call ends
+                status: 'approved' as const,
+                availability: 'online' as const,
                 consultationMinutes: newMinutes,
                 consultationCount: g.consultationCount + 1,
                 audioCallsCount: newAudioCount,
                 videoCallsCount: newVideoCount,
                 totalEarningsRs: newEarnings,
               };
+              saveGuruToFirestore(updated);
+              return updated;
             }
             return g;
           })
         );
       } else {
-        // Did not connect or short call cancelled: set guru back online, zero wallet deduction
         setGurus((prev) =>
-          prev.map((g) => (g.id === selectedGuru.id ? { ...g, status: 'online' } : g))
+          prev.map((g) => {
+            if (g.id === selectedGuru.id) {
+              const updated = { ...g, status: 'approved' as const, availability: 'online' as const };
+              saveGuruToFirestore(updated);
+              return updated;
+            }
+            return g;
+          })
         );
       }
     }
@@ -261,11 +468,13 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       alert(isNe ? '⚠️ यो गुरु एडमिनद्वारा प्रतिबन्धित (Banned) हुनुहुन्छ। परामर्श लिन मिल्दैन।' : 'This guru is banned by admin.');
       return false;
     }
-    if (guru.status === 'offline') {
+    const isOffline = guru.availability === 'offline' || guru.status === 'offline';
+    const isBusy = guru.availability === 'busy' || guru.status === 'busy';
+    if (isOffline) {
       alert(isNe ? 'यो गुरु हाल अफलाइन (Offline) हुनुहुन्छ। कृपया अर्को अनलाइन गुरु छान्नुहोस्।' : 'This guru is currently offline. Cannot call.');
       return false;
     }
-    if (guru.status === 'busy') {
+    if (isBusy) {
       alert(isNe ? 'यो गुरु हाल अर्को परामर्शमा व्यस्त (Busy) हुनुहुन्छ। कृपया उहाँ फ्री भएपछि प्रयास गर्नुहोस्।' : 'This guru is currently busy on another call. Please try later.');
       return false;
     }
@@ -288,46 +497,9 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     if (!checkGuruAvailable(guru)) return;
     checkWalletBalance(type);
     setSelectedGuru(guru);
-    setGurus((prev) => prev.map((g) => (g.id === guru.id ? { ...g, status: 'busy' } : g)));
-
-    if (type === 'chat') {
-      const savedDobYear = localStorage.getItem('vaidik_client_dob_year') || clientDobYear;
-      const savedDobMonth = localStorage.getItem('vaidik_client_dob_month') || clientDobMonth;
-      const savedDobDay = localStorage.getItem('vaidik_client_dob_day') || clientDobDay;
-      const savedDobTime = localStorage.getItem('vaidik_client_dob_time') || clientDobTime;
-      const savedDobPlace = localStorage.getItem('vaidik_client_dob_place') || clientDobPlace;
-
-      const birthDetailsText =
-        savedDobYear && savedDobPlace
-          ? isNe
-            ? `🙏 मेरो जन्म विवरण:\n• जन्म मिति: ${savedDobYear} साल ${savedDobMonth} महिना ${savedDobDay} गते\n• जन्म समय: ${savedDobTime}\n• जन्मस्थान: ${savedDobPlace}`
-            : `🙏 My Birth Details:\n- DOB: ${savedDobYear} ${savedDobMonth} ${savedDobDay}\n- Time: ${savedDobTime}\n- Place: ${savedDobPlace}`
-          : '';
-
-      const initialMsgs = [
-        ...(birthDetailsText
-          ? [
-              {
-                sender: 'user' as const,
-                text: birthDetailsText,
-                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              },
-            ]
-          : []),
-        {
-          sender: 'guru' as const,
-          text: isNe
-            ? `नमस्कार! म ${guru.name} हुँ। वैदिक ज्योतिष इन-एप च्याट सेवामा स्वागत छ। तपाईंको कुण्डली वा जिज्ञासाको सम्बन्धमा म प्रत्यक्ष उपस्थित छु।`
-            : `Hello! I am ${guru.name}. Welcome to in-app consultation. How can I assist you today?`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ];
-      setChatMessages(initialMsgs);
-      setActiveModal('chat');
-    } else {
-      // Direct in-app Audio or Video consultation
-      setActiveModal(type);
-    }
+    setPendingGuruAction(type);
+    setPendingGuruTarget(guru);
+    setIsBirthDetailsModalOpen(true);
   };
 
   const handleBirthDetailsSubmit = (e: React.FormEvent) => {
@@ -349,28 +521,26 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     setIsBirthDetailsModalOpen(false);
 
     if (pendingGuruTarget && pendingGuruAction) {
-      setSelectedGuru(pendingGuruTarget);
-      setGurus((prev) => prev.map((g) => g.id === pendingGuruTarget.id ? { ...g, status: 'busy' } : g));
+      // Send birth details to guru inbox (chat messages)
+      const initialMsgs = [
+        {
+          sender: 'user' as const,
+          text: birthDetailsText,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+        {
+          sender: 'guru' as const,
+          text: isNe
+            ? `नमस्कार! म ${pendingGuruTarget.name} हुँ। तपाईंको जन्म विवरण (${clientDobYear} साल, ${clientDobMonth} ${clientDobDay} गते, ${clientDobPlace}) प्राप्त भयो। म तपाईंको कुण्डली तयार गर्दै छु।`
+            : `Hello! I am ${pendingGuruTarget.name}. Received your birth details. Preparing your Kundali.`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ];
+      setChatMessages(initialMsgs);
 
-      if (pendingGuruAction === 'chat') {
-        setChatMessages([
-          {
-            sender: 'user',
-            text: birthDetailsText,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-          {
-            sender: 'guru',
-            text: isNe 
-              ? `नमस्कार! म ${pendingGuruTarget.name} हुँ। तपाईंको जन्म विवरण (${clientDobYear} साल, ${clientDobMonth} ${clientDobDay} गते, ${clientDobPlace}) प्राप्त भयो। तपाईंलाई कसरी मद्दत गर्न सक्छु?`
-              : `Hello! I am ${pendingGuruTarget.name}. Received your birth details. How can I assist you?`,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          },
-        ]);
-        setActiveModal('chat');
-      } else {
-        setActiveModal(pendingGuruAction);
-      }
+      // Open 2-minute Kundali preparation waiting screen modal
+      setWaitingTimeRemaining(120);
+      setIsWaitingKundaliOpen(true);
     }
   };
 
@@ -378,7 +548,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     if (!checkGuruAvailable(guru)) return;
     if (!checkWalletBalance('chat')) return;
     setSelectedGuru(guru);
-    setGurus((prev) => prev.map((g) => g.id === guru.id ? { ...g, status: 'busy' } : g));
+    setGurus((prev) => prev.map((g) => g.id === guru.id ? { ...g, availability: 'busy' } : g));
     setChatMessages([
       {
         sender: 'guru',
@@ -393,20 +563,24 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     if (!checkGuruAvailable(guru)) return;
     if (!checkWalletBalance(type)) return;
     setSelectedGuru(guru);
-    setGurus((prev) => prev.map((g) => g.id === guru.id ? { ...g, status: 'busy' } : g));
+    setGurus((prev) => prev.map((g) => g.id === guru.id ? { ...g, availability: 'busy' } : g));
     setActiveModal(type);
   };
 
   const handleCloseChatModal = () => {
     if (selectedGuru) {
-      setGurus((prev) => prev.map((g) => g.id === selectedGuru.id ? { ...g, status: 'online' } : g));
+      setGurus((prev) => prev.map((g) => g.id === selectedGuru.id ? { ...g, availability: 'online' } : g));
     }
     setActiveModal(null);
   };
 
   const handleToggleMyStatus = (newStatus: 'online' | 'busy' | 'offline') => {
     if (!myGuruId) return;
-    const updated = gurus.map((g) => g.id === myGuruId ? { ...g, status: newStatus } : g);
+    const target = gurus.find((g) => g.id === myGuruId);
+    if (target) {
+      saveGuruToFirestore({ ...target, availability: newStatus, status: 'approved' });
+    }
+    const updated = gurus.map((g) => g.id === myGuruId ? { ...g, availability: newStatus } : g);
     setGurus(updated);
   };
 
@@ -450,6 +624,8 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       createdAt: new Date().toISOString(),
     };
 
+    saveBookingToFirestore(newBooking);
+
     const existingBookings = JSON.parse(localStorage.getItem('vaidik_client_bookings') || '[]');
     localStorage.setItem('vaidik_client_bookings', JSON.stringify([newBooking, ...existingBookings]));
 
@@ -491,6 +667,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       createdAt: new Date().toISOString(),
       status: 'pending',
     };
+    saveRechargeToFirestore(newRecharge);
     const existingRecharges = JSON.parse(localStorage.getItem('vaidik_client_recharges') || '[]');
     localStorage.setItem('vaidik_client_recharges', JSON.stringify([newRecharge, ...existingRecharges]));
 
@@ -525,7 +702,9 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
 
     const updatedGurus = gurus.map((g) => {
       if (g.id === ratingGuru.id) {
-        return { ...g, rating: newAvg, ratingCount: newCount };
+        const updated = { ...g, rating: newAvg, ratingCount: newCount };
+        saveGuruToFirestore(updated);
+        return updated;
       }
       return g;
     });
@@ -562,7 +741,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     }, 1500);
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regName || !regAge || !regExperience || !regQualifications || !regSpecializations || !regPhone || !regCertificateFile) {
       setRegError(isNe ? 'कृपया सबै अनिवार्य विवरणहरू भर्नुहोस् र प्रमाणपत्र अपलोड गर्नुहोस्।' : 'Please fill in all required fields and upload certificate.');
@@ -573,8 +752,9 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       return;
     }
 
+    const appId = 'app-' + Date.now();
     const newApp = {
-      id: 'app-' + Date.now(),
+      id: appId,
       name: regName,
       age: parseInt(regAge) || 35,
       experienceYears: parseInt(regExperience) || 5,
@@ -583,13 +763,18 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       otherDetails: regOtherDetails || 'विशेषज्ञ ज्योतिष सेवा।',
       phone: regPhone,
       certificateUrl: regCertificateFile,
-      createdAt: new Date().toISOString(),
-      status: 'pending',
+      createdAt: Date.now(),
+      createdAtIso: new Date().toISOString(),
+      status: 'pending', // 1. Form Submission: write application data directly to Firebase path /guru_applications
     };
-    const existingApps = JSON.parse(localStorage.getItem('vaidik_guru_applications') || '[]');
-    localStorage.setItem('vaidik_guru_applications', JSON.stringify([newApp, ...existingApps]));
 
-    setRegSuccess(isNe ? 'तपाईंको आवेदन एडमिनसमक्ष पेस भयो! एडमिनबाट स्वीकृत भएपछि मात्र प्रोफाइल सक्रिय हुनेछ।' : 'Your application was submitted to Admin for approval.');
+    // 1. Write directly to Firebase Realtime Database path /guru_applications instead of localStorage
+    await saveApplicationToFirestore(newApp);
+
+    localStorage.setItem('vaidik_my_guru_app_id', appId);
+    setMyGuruAppId(appId);
+
+    setRegSuccess(isNe ? 'तपाईंको आवेदन सिधै Firebase डेटाबेसमा पेस भयो! एडमिनबाट स्वीकृत भएपछि प्रोफाइल अनलाइन देखिनेछ।' : 'Application submitted directly to Firebase! Your profile will appear once approved by admin.');
     setRegError('');
     setTimeout(() => {
       setIsRegisterOpen(false);
@@ -710,6 +895,19 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
               <Wallet className="w-3.5 h-3.5" />
               <span>{isNe ? 'मेरो कमाई' : 'My Earnings'}</span>
             </button>
+          ) : myGuruAppId ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] bg-amber-950/80 text-amber-300 border border-amber-700/60 px-2.5 py-1 rounded-xl font-medium">
+                {isNe ? '⏳ आवेदन समीक्षा हुँदै' : '⏳ Pending'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsRegisterOpen(true)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium px-2 py-1 rounded-xl text-xs cursor-pointer"
+              >
+                {isNe ? 'फारम' : 'Form'}
+              </button>
+            </div>
           ) : (
             <button
               type="button"
@@ -752,9 +950,9 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       <div className="max-h-[360px] overflow-y-auto pr-1 space-y-2">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {gurus.map((guru) => {
-            const isAvailable = guru.status === 'online';
-            const isBusy = guru.status === 'busy';
-            const isOffline = guru.status === 'offline';
+            const isAvailable = (guru.availability || 'online') === 'online';
+            const isBusy = guru.availability === 'busy';
+            const isOffline = guru.availability === 'offline';
 
             return (
               <div key={guru.id} className="bg-slate-900/95 border border-amber-600/35 hover:border-amber-500 rounded-2xl p-3.5 shadow-lg flex flex-col justify-between gap-3 transition-all duration-200">
@@ -809,6 +1007,17 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
                       <span className="text-emerald-400 font-medium bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/60 ml-auto">
                         {guru.experienceYears} वर्ष अनुभव
                       </span>
+                      {guru.id === myGuruId && (
+                        <button
+                          type="button"
+                          onClick={openEditProfile}
+                          className="text-[10px] bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-lg flex items-center gap-1 font-semibold cursor-pointer"
+                          title="आफ्नो प्रोफाइल सम्पादन गर्नुहोस्"
+                        >
+                          <Edit3 className="w-3 h-3" />
+                          <span>{isNe ? 'सम्पादन' : 'Edit'}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1209,13 +1418,193 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsMyDashboardOpen(false)}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 rounded-xl text-sm transition-all cursor-pointer"
-            >
-              {isNe ? 'बन्द गर्नुहोस्' : 'Close'}
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2 pt-2">
+              <button
+                type="button"
+                onClick={openEditProfile}
+                className="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-3 rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow cursor-pointer"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>{isNe ? '✏️ मेरो प्रोफाइल सम्पादन गर्नुहोस्' : '✏️ Edit Profile'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsMyDashboardOpen(false)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 px-5 rounded-xl text-xs transition-all cursor-pointer"
+              >
+                {isNe ? 'बन्द गर्नुहोस्' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT GURU PROFILE MODAL */}
+      {isEditProfileOpen && myProfile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-amber-600/60 rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl relative text-slate-100 max-h-[90vh] overflow-y-auto space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-amber-900/40">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-serif font-bold text-amber-200">
+                    {isNe ? 'मेरो गुरु प्रोफाइल सम्पादन (Edit Profile)' : 'Edit Guru Profile'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {isNe ? 'आफ्नो नाम, फोन, अनुभव, योग्यता र फोटो परिवर्तन गर्नुहोस्।' : 'Update your personal details, qualifications, and profile photo.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditProfileOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-2 rounded-xl hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              {editError && (
+                <div className="bg-red-950/80 border border-red-800 text-red-200 p-3 rounded-xl text-xs font-semibold">
+                  {editError}
+                </div>
+              )}
+              {editSuccess && (
+                <div className="bg-emerald-950/80 border border-emerald-800 text-emerald-200 p-3 rounded-xl text-xs font-semibold">
+                  {editSuccess}
+                </div>
+              )}
+
+              {/* Profile Photo Preview & Change */}
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl flex items-center gap-4">
+                <div className="relative shrink-0">
+                  <img
+                    src={editPhotoUrl || myProfile.certificateUrl}
+                    alt={editName || myProfile.name}
+                    className="w-16 h-16 rounded-full object-cover border-2 border-amber-500 shadow-md"
+                  />
+                  <label className="absolute bottom-0 right-0 bg-amber-500 hover:bg-amber-400 text-slate-950 p-1.5 rounded-full cursor-pointer shadow transition-all">
+                    <Camera className="w-3.5 h-3.5" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleEditPhotoChange}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+                <div className="flex-1">
+                  <span className="text-xs font-semibold text-amber-300 block mb-1">
+                    {isNe ? 'प्रोफाइल फोटो / प्रमाणपत्र परिवर्तन' : 'Change Profile Photo'}
+                  </span>
+                  <p className="text-[11px] text-slate-400 mb-2">
+                    {isNe ? 'नयाँ फोटो वा प्रमाणपत्र अपलोड गर्न क्यामरा आइकनमा थिच्नुहोस्।' : 'Click camera icon to upload a new profile picture.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">{isNe ? 'पुरा नाम (Full Name) *' : 'Full Name *'}</label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="उदा. आचार्य रामप्रसाद"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">{isNe ? 'सम्पर्क फोन नम्बर (Phone) *' : 'Phone *'}</label>
+                  <input
+                    type="text"
+                    required
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    placeholder="उदा. +977 9800000000"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">{isNe ? 'उमेर (Age)' : 'Age'}</label>
+                  <input
+                    type="number"
+                    value={editAge}
+                    onChange={(e) => setEditAge(e.target.value)}
+                    placeholder="उदा. 40"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-300">{isNe ? 'अनुभव (वर्षमा)' : 'Experience (Years)'}</label>
+                  <input
+                    type="number"
+                    value={editExperience}
+                    onChange={(e) => setEditExperience(e.target.value)}
+                    placeholder="उदा. 15"
+                    className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">{isNe ? 'योग्यता / उपाधि (Qualifications) *' : 'Qualifications *'}</label>
+                <input
+                  type="text"
+                  required
+                  value={editQualifications}
+                  onChange={(e) => setEditQualifications(e.target.value)}
+                  placeholder="उदा. वेद तथा ज्योतिष आचार्य"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">{isNe ? 'विशेषज्ञता क्षेत्रहरू (Comma separated) *' : 'Specializations *'}</label>
+                <input
+                  type="text"
+                  required
+                  value={editSpecializations}
+                  onChange={(e) => setEditSpecializations(e.target.value)}
+                  placeholder="उदा. कुण्डली विश्लेषण, वास्तु, रुद्राभिषेक"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">{isNe ? 'थप विवरण वा परिचय (Other Details)' : 'Other Details / Bio'}</label>
+                <textarea
+                  rows={3}
+                  value={editOtherDetails}
+                  onChange={(e) => setEditOtherDetails(e.target.value)}
+                  placeholder="उदा. विशेषतः मांगलिक दोष निवारण र रुद्राभिषेक पूजामा सिद्धहस्त।"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold py-3 rounded-xl text-xs transition-all shadow-lg cursor-pointer"
+                >
+                  {isNe ? 'परिवर्तन सेभ गर्नुहोस् (Save Changes)' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditProfileOpen(false)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-5 py-3 rounded-xl text-xs transition-all cursor-pointer"
+                >
+                  {isNe ? 'रद्द गर्नुहोस्' : 'Cancel'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -2027,6 +2416,121 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
                 className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-4 py-2.5 rounded-xl text-xs transition-all cursor-pointer"
               >
                 {isNe ? 'बन्द गर्नुहोस् (Close)' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* KUNDALI PREPARATION WAITING SCREEN MODAL (2-MINUTE COUNTDOWN) */}
+      {isWaitingKundaliOpen && pendingGuruTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-slate-900 border border-amber-600/60 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-slate-100 text-center space-y-6">
+            <div className="w-16 h-16 bg-amber-500/10 border-2 border-amber-500/40 rounded-full flex items-center justify-center mx-auto text-amber-400 animate-spin">
+              <Sparkles className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-serif font-bold text-amber-200">
+                {isNe ? 'गुरुले कुण्डली तयार गर्दै हुनुहुन्छ...' : 'Guru is preparing Kundali...'}
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {isNe
+                  ? `🙏 गुरु ${pendingGuruTarget.name} ले तपाईंको जन्म विवरणको आधारमा जन्मकुण्डली तथा ग्रह दशा तयार गर्दै हुनुहुन्छ। कृपया प्रतीक्षा गर्नुहोस्...`
+                  : `Guru ${pendingGuruTarget.name} is preparing your birth chart and planetary positions. Please wait...`}
+              </p>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800 p-4 rounded-2xl">
+              <span className="text-[10px] text-slate-400 block uppercase tracking-wider mb-1">
+                {isNe ? 'अनुमानित प्रतीक्षा समय (Estimated Wait Time)' : 'Estimated Wait Time'}
+              </span>
+              <div className="text-3xl font-mono font-bold text-amber-400">
+                {Math.floor(waitingTimeRemaining / 60)}:{String(waitingTimeRemaining % 60).padStart(2, '0')}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsWaitingKundaliOpen(false);
+                  if (pendingGuruTarget && pendingGuruAction) {
+                    setSelectedGuru(pendingGuruTarget);
+                    setGurus((p) => p.map((g) => g.id === pendingGuruTarget.id ? { ...g, status: 'busy' } : g));
+                    setActiveModal(pendingGuruAction);
+                  }
+                }}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold py-3 rounded-xl text-xs transition-all shadow cursor-pointer"
+              >
+                {isNe ? 'सिधै परामर्श सुरु गर्नुहोस् (Skip & Start Now)' : 'Skip & Start Now'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REAL-TIME GURU APPLICATION APPROVED CELEBRATION MODAL */}
+      {approvalAlert?.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4 animate-fadeIn">
+          <div className="bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-emerald-500/80 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative text-slate-100 text-center space-y-5">
+            <button
+              onClick={() => setApprovalAlert(null)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800/80 p-2 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="relative mx-auto w-20 h-20">
+              <div className="absolute inset-0 bg-emerald-500/20 rounded-full animate-ping"></div>
+              <div className="relative w-20 h-20 bg-emerald-950 border-2 border-emerald-400 rounded-full flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/20">
+                <CheckCircle className="w-10 h-10 text-emerald-400" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="inline-block bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                {isNe ? '🔔 लाइभ सूचना: आवेदन स्वीकृत भयो' : '🔔 Live Alert: Application Approved'}
+              </span>
+              <h3 className="text-xl font-serif font-bold text-emerald-200">
+                {isNe ? '🎉 बधाई छ! तपाईंको गुरु आवेदन स्वीकृत भयो!' : '🎉 Congratulations! Application Approved!'}
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {isNe
+                  ? `आदरणीय ${approvalAlert.guruName}, एडमिनद्वारा तपाईंको योग्यता तथा प्रमाणपत्र प्रमाणीकरण गरी प्रोफाइल स्वीकृत गरिएको छ। अब तपाईं सबै सेवाग्राहीहरूका लागि अनलाइन देखिनुहुनेछ!`
+                  : `Dear ${approvalAlert.guruName}, your application has been verified and approved by the admin. You are now live on the platform!`}
+              </p>
+            </div>
+
+            <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-3.5 text-left text-xs space-y-2">
+              <div className="flex items-center gap-2 text-emerald-300 font-bold">
+                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <span>{isNe ? 'अब तपाईंले गर्न सक्नुहुन्छ:' : 'You can now:'}</span>
+              </div>
+              <ul className="text-[11px] text-slate-300 space-y-1 list-disc list-inside">
+                <li>{isNe ? 'च्याट, अडियो र भिडियो कलमार्फत परामर्श दिनुहोस्' : 'Provide consultations via Chat, Audio & Video'}</li>
+                <li>{isNe ? 'आफ्नो अनलाइन/अफलाइन स्थिति नियन्त्रण गर्नुहोस्' : 'Manage your live online/offline status'}</li>
+                <li>{isNe ? 'वालेट र प्रति मिनेट आम्दानी हेर्नुहोस्' : 'Track earnings and withdrawal balance'}</li>
+              </ul>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setApprovalAlert(null);
+                  setIsMyDashboardOpen(true);
+                }}
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-3 rounded-xl text-xs transition-all shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Wallet className="w-4 h-4" />
+                <span>{isNe ? 'मेरो गुरु ड्यासबोर्ड खोल्नुहोस्' : 'Open My Dashboard'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setApprovalAlert(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium px-4 py-3 rounded-xl text-xs transition-all cursor-pointer"
+              >
+                {isNe ? 'ठीक छ (Dismiss)' : 'Dismiss'}
               </button>
             </div>
           </div>

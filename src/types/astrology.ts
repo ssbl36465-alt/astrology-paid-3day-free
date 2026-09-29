@@ -162,6 +162,16 @@ export interface PanchangaData {
   };
   sunrise: string;
   sunset: string;
+  sunSign: string;
+  sunSignNe: string;
+  moonSign: string;
+  moonSignNe: string;
+  ritu: string;
+  rituNe: string;
+  ayana: string;
+  ayanaNe: string;
+  rahuKaal: string;
+  abhijitMuhurta: string;
 }
 
 export interface AntardashaPeriod {
