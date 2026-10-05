@@ -258,14 +258,45 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     setIsEditProfileOpen(true);
   };
 
-  const handleEditPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImageFile = async (file: File, maxDim = 800, quality = 0.7): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          if (width > height && width > maxDim) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else if (height > maxDim) {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } else {
+            resolve(e.target?.result as string || '');
+          }
+        };
+        img.onerror = () => resolve(e.target?.result as string || '');
+        img.src = e.target?.result as string || '';
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleEditPhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setEditPhotoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      const compressed = await compressImageFile(file, 600, 0.7);
+      setEditPhotoUrl(compressed);
     }
   };
 
@@ -584,25 +615,19 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     setGurus(updated);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setRegCertificateFile(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      const compressed = await compressImageFile(file, 800, 0.7);
+      setRegCertificateFile(compressed);
     }
   };
 
-  const handleVoucherFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVoucherFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBookingVoucherUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      const compressed = await compressImageFile(file, 800, 0.7);
+      setBookingVoucherUrl(compressed);
     }
   };
 
@@ -640,14 +665,11 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
     }, 2000);
   };
 
-  const handleRechargeFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRechargeFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setRechargeVoucherUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+      const compressed = await compressImageFile(file, 800, 0.7);
+      setRechargeVoucherUrl(compressed);
     }
   };
 
@@ -768,13 +790,19 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       status: 'pending', // 1. Form Submission: write application data directly to Firebase path /guru_applications
     };
 
-    // 1. Write directly to Firebase Realtime Database path /guru_applications instead of localStorage
-    await saveApplicationToFirestore(newApp);
+    // 1. Write directly to Firebase path /guru_applications without any localStorage fallbacks
+    try {
+      await saveApplicationToFirestore(newApp);
+    } catch (err: any) {
+      console.error('Failed to submit application to Firebase:', err);
+      setRegError(isNe ? 'Firebase डेटाबेसमा सेभ गर्न सकिएन। कृपया पुनः प्रयास गर्नुहोस्।' : 'Failed to save to Firebase. Please try again.');
+      return;
+    }
 
     localStorage.setItem('vaidik_my_guru_app_id', appId);
     setMyGuruAppId(appId);
 
-    setRegSuccess(isNe ? 'तपाईंको आवेदन सिधै Firebase डेटाबेसमा पेस भयो! एडमिनबाट स्वीकृत भएपछि प्रोफाइल अनलाइन देखिनेछ।' : 'Application submitted directly to Firebase! Your profile will appear once approved by admin.');
+    setRegSuccess(isNe ? 'तपाईंको आवेदन सिधै Firebase डेटाबेसमा सफलतापूर्वक पेस भयो! एडमिनबाट स्वीकृत भएपछि प्रोफाइल सबै डिभाइसमा अनलाइन देखिनेछ।' : 'Application submitted directly to Firebase Database! Your profile will appear on all devices once approved by admin.');
     setRegError('');
     setTimeout(() => {
       setIsRegisterOpen(false);

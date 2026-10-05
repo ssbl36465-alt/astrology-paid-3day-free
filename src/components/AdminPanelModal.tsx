@@ -62,6 +62,17 @@ interface GuruReport {
   bannedUntil?: number | null;
 }
 
+// One-way SHA-256 cryptographic hash of admin secret to keep the actual code non-public
+const ADMIN_HASH = '05244419492771ec1e0e7a5efc3882e6ed84880d47ac8bcd1172dabefc899c44';
+
+async function computeSHA256(text: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClose }) => {
   const isNe = true;
   const [adminPass, setAdminPass] = useState('');
@@ -151,13 +162,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       setClientBookings([]);
     }
 
-    const savedApps = localStorage.getItem('vaidik_guru_applications');
-    if (savedApps) {
-      try { setGuruApplications(JSON.parse(savedApps)); } catch (e) { setGuruApplications([]); }
-    } else {
-      setGuruApplications([]);
-    }
-
     const savedRecharges = localStorage.getItem('vaidik_client_recharges');
     if (savedRecharges) {
       try { setClientRecharges(JSON.parse(savedRecharges)); } catch (e) { setClientRecharges([]); }
@@ -179,21 +183,17 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
 
     syncApplicationsFromFirestore().then((remoteApps) => {
       if (remoteApps && remoteApps.length > 0) {
-        setGuruApplications((prev) => {
-          const map = new Map<string, GuruApplication>();
-          prev.forEach((a) => map.set(a.id, a));
-          remoteApps.forEach((a) => map.set(a.id, a));
-          return Array.from(map.values());
-        });
+        setGuruApplications(remoteApps);
       }
     });
   };
 
   if (!isOpen) return null;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (adminPass.trim() === '2m2du6hkx9') {
+    const inputHash = await computeSHA256(adminPass.trim());
+    if (inputHash === ADMIN_HASH) {
       setIsAuthenticated(true);
       localStorage.setItem('jyotish_admin_auth', 'true');
       loadAdminData();
@@ -218,7 +218,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
     const guruId = appToApprove.id.replace('app-', 'guru-');
 
     // 1. Update application status to approved in Firebase /guru_applications
-    await saveApplicationToFirestore({ ...appToApprove, status: 'approved' });
+    const approvedApp = { ...appToApprove, status: 'approved' as const };
+    await saveApplicationToFirestore(approvedApp);
+    setGuruApplications((prev) => prev.map((a) => a.id === appId ? approvedApp : a));
 
     // 2. Update their status to approved in Firebase under /gurus
     const newGuruProfile = {
@@ -230,7 +232,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       specializations: appToApprove.specializations,
       otherDetails: appToApprove.otherDetails,
       certificateUrl: appToApprove.certificateUrl,
-      status: 'approved', // Status set to 'approved' in Firebase under /gurus
+      status: 'approved' as const, // Status set to 'approved' in Firebase under /gurus
       adminStatus: 'active' as const,
       bannedUntil: null,
       rating: 5.0,
@@ -244,6 +246,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       phone: appToApprove.phone,
     };
     await saveGuruToFirestore(newGuruProfile);
+    setGurusReport((prev) => [newGuruProfile, ...prev.filter((g) => g.id !== guruId)]);
 
     // 3. Update /users/{uid}/role as guru in Firebase
     await setUserRole(guruId, 'guru', {
@@ -261,7 +264,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
 
     const appToReject = guruApplications.find(a => a.id === appId);
     if (appToReject) {
-      await saveApplicationToFirestore({ ...appToReject, status: 'rejected' });
+      const rejectedApp = { ...appToReject, status: 'rejected' as const };
+      await saveApplicationToFirestore(rejectedApp);
+      setGuruApplications((prev) => prev.map((a) => a.id === appId ? rejectedApp : a));
     }
     alert('गुरु आवेदन अस्वीकार गरियो।');
   };
@@ -269,11 +274,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
   const handleDeleteGuruApp = async (appId: string) => {
     if (window.confirm('के तपाईं यो आवेदन स्थायी रूपमा हटाउन (Delete) चाहनुहुन्छ?')) {
       await deleteApplicationFromFirestore(appId);
+      setGuruApplications((prev) => prev.filter((a) => a.id !== appId));
     }
   };
 
   // 2. GURU BAN (24H OR PERMANENT) & RE-ACCEPT
-  const handleBanGuru = (guruId: string, type: '24h' | 'permanent') => {
+  const handleBanGuru = async (guruId: string, type: '24h' | 'permanent') => {
     const msg = type === '24h' 
       ? 'के तपाईं यो गुरुलाई २४ घण्टाका लागि प्रतिबन्ध (24h Ban) गर्न चाहनुहुन्छ?' 
       : 'के तपाईं यो गुरुलाई स्थायी रूपमा प्रतिबन्ध (Permanent Ban) गर्न चाहनुहुन्छ?';
@@ -295,19 +301,21 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       });
 
       setGurusReport(updated);
-      localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updated));
-      window.dispatchEvent(new Event('storage'));
+      const targetGuru = updated.find(g => g.id === guruId);
+      if (targetGuru) {
+        await saveGuruToFirestore(targetGuru);
+      }
       alert(type === '24h' ? 'गुरु २४ घण्टाका लागि प्रतिबन्धित गरियो।' : 'गुरु स्थायी रूपमा प्रतिबन्धित गरियो।');
     }
   };
 
-  const handleReAcceptGuru = (guruId: string) => {
+  const handleReAcceptGuru = async (guruId: string) => {
     if (window.confirm('के तपाईं यो गुरुको प्रतिबन्ध फुकुवा गरी पुनः स्वीकृति (Re-Accept) दिन चाहनुहुन्छ?')) {
       const updated = gurusReport.map(g => {
         if (g.id === guruId) {
           return {
             ...g,
-            adminStatus: 'active',
+            adminStatus: 'active' as const,
             bannedUntil: null,
             status: 'online',
           };
@@ -316,8 +324,10 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       });
 
       setGurusReport(updated);
-      localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updated));
-      window.dispatchEvent(new Event('storage'));
+      const targetGuru = updated.find(g => g.id === guruId);
+      if (targetGuru) {
+        await saveGuruToFirestore(targetGuru);
+      }
       alert('गुरुको प्रतिबन्ध फुकुवा गरियो र पुनः सक्रिय (Re-Accepted) बनाइयो!');
     }
   };
@@ -377,12 +387,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
     }
   };
 
-  const handleResetEarnings = (guruId: string) => {
+  const handleResetEarnings = async (guruId: string) => {
     if (window.confirm('के तपाईंले यस गुरुलाई भुक्तानी गरिसक्नुभयो? कमाई शून्य (0) बनाउन चाहनुहुन्छ?')) {
       const updated = gurusReport.map((g) => (g.id === guruId ? { ...g, totalEarningsRs: 0, consultationMinutes: 0, audioCallsCount: 0, videoCallsCount: 0, chatRepliesCount: 0 } : g));
       setGurusReport(updated);
-      localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updated));
-      window.dispatchEvent(new Event('storage'));
+      const targetGuru = updated.find(g => g.id === guruId);
+      if (targetGuru) {
+        await saveGuruToFirestore(targetGuru);
+      }
       alert('गुरुको आम्दानी सफलतापूर्वक शून्य (0) बनाइयो।');
     }
   };

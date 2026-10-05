@@ -263,12 +263,12 @@ export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
 
   const renderChart = (chartData: KundaliCalculationOutput, chartTitle: string) => {
     if (selectedChartStyle === 'south') {
-      return <SouthIndianChart data={chartData} language={language} title={chartTitle} />;
+      return <SouthIndianChart data={chartData} language={language} title={chartTitle} theme="light" allowToggleTheme={false} />;
     }
     if (selectedChartStyle === 'east') {
-      return <EastIndianChart data={chartData} language={language} title={chartTitle} />;
+      return <EastIndianChart data={chartData} language={language} title={chartTitle} theme="light" allowToggleTheme={false} />;
     }
-    return <NorthIndianChart data={chartData} language={language} title={chartTitle} />;
+    return <NorthIndianChart data={chartData} language={language} title={chartTitle} theme="light" allowToggleTheme={false} />;
   };
 
   return (
@@ -672,89 +672,123 @@ export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
               </div>
             </div>
 
-            {/* 2. 4 Key Kundali Charts (Lagna, Rashi, Navamsha D-9, Hora D-2) */}
-            <div className="mb-3">
-              <h4 className="font-bold text-[#991b1b] text-xs uppercase tracking-wider mb-1.5 border-b border-[#78350f] pb-0.5 text-center">
-                ॥ २. जन्म (लग्न), चन्द्र (राशि), नवमांश (D-9) तथा होरा (D-2) कुण्डली चक्र ॥
+            {/* 2. Key Kundali Charts - Large Size, Single Chart Per Row */}
+            <div className="mb-5">
+              <h4 className="font-bold text-[#991b1b] text-sm uppercase tracking-wider mb-3 border-b-2 border-[#78350f] pb-1 text-center font-serif">
+                ॥ २. जन्म (लग्न), चन्द्र (राशि), नवमांश (D-9) तथा होरा (D-2) कुण्डली चक्र (विस्तृत ठूलो दृश्य) ॥
               </h4>
-              <div className="grid grid-cols-2 gap-2.5 items-center justify-center">
-                <div className="border border-[#78350f] rounded-lg p-1 bg-[#fffbeb] shadow-sm">
+              <div className="flex flex-col gap-6 items-center w-full">
+                <div className="w-full max-w-[560px] mx-auto border-2 border-[#b45309] rounded-2xl p-2 sm:p-3 bg-[#fffdf9] shadow-md print:break-inside-avoid">
                   {renderChart(data, language === 'ne' ? '१. D1 जन्म (लग्न) कुण्डली' : '1. D1 Birth (Lagna) Chart')}
                 </div>
-                <div className="border border-[#78350f] rounded-lg p-1 bg-[#fffbeb] shadow-sm">
+                <div className="w-full max-w-[560px] mx-auto border-2 border-[#b45309] rounded-2xl p-2 sm:p-3 bg-[#fffdf9] shadow-md print:break-inside-avoid">
                   {renderChart(chandraData, language === 'ne' ? '२. चन्द्र (राशि) कुण्डली' : '2. Chandra (Moon) Chart')}
                 </div>
-                <div className="border border-[#78350f] rounded-lg p-1 bg-[#fffbeb] shadow-sm">
+                <div className="w-full max-w-[560px] mx-auto border-2 border-[#b45309] rounded-2xl p-2 sm:p-3 bg-[#fffdf9] shadow-md print:break-inside-avoid">
                   {renderChart(navamshaData, language === 'ne' ? '३. D9 नवमांश कुण्डली' : '3. D9 Navamsha Chart')}
                 </div>
-                <div className="border border-[#78350f] rounded-lg p-1 bg-[#fffbeb] shadow-sm">
+                <div className="w-full max-w-[560px] mx-auto border-2 border-[#b45309] rounded-2xl p-2 sm:p-3 bg-[#fffdf9] shadow-md print:break-inside-avoid">
                   {renderChart(horaData, language === 'ne' ? '४. D2 होरा कुण्डली' : '4. D2 Hora Chart')}
                 </div>
               </div>
             </div>
 
-            {/* 3. Dasha Summary Tables (Vimshottari, Tribhagi, Yogini) */}
-            <div className="mb-3">
-              <h4 className="font-bold text-[#991b1b] text-xs uppercase tracking-wider mb-1.5 border-b border-[#78350f] pb-0.5">
-                ३. दशा प्रणाली विवरण (Vimshottari, Tribhagi & Yogini Dashas)
+            {/* 3. Dasha Summary Tables (Vimshottari, Tribhagi, Yogini) - Large Clear Font Size */}
+            <div className="mb-6 print:break-inside-avoid">
+              <h4 className="font-bold text-[#991b1b] text-base sm:text-lg uppercase tracking-wide mb-3 border-b-2 border-[#78350f] pb-1.5 font-serif text-center">
+                ॥ ३. दशा प्रणाली विवरण (Vimshottari, Tribhagi & Yogini Dashas) ॥
               </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px]">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
                 {/* Vimshottari Table */}
-                <div className="border border-[#78350f] rounded bg-white p-1.5">
-                  <div className="font-bold text-[#991b1b] text-center border-b border-[#78350f] pb-0.5 mb-1">
-                    विंशोत्तरी दशा (१२० वर्ष)
+                <div className="border-2 border-[#78350f] rounded-xl bg-white shadow-md p-3 print:break-inside-avoid flex flex-col">
+                  <div className="font-bold text-[#991b1b] text-center border-b-2 border-[#d97706] pb-2 mb-2 text-sm sm:text-base font-serif bg-amber-50 -mx-3 -mt-3 p-2.5">
+                    विंशोत्तरी दशा (१२० वर्ष महादशा)
                   </div>
-                  <div className="space-y-0.5 max-h-[110px] overflow-y-auto">
+                  <div className="space-y-1.5 pt-1">
                     {vimshottariDasha.mahadashas.slice(0, 9).map((m) => (
                       <div
                         key={m.planet}
-                        className={`flex justify-between px-1 rounded ${
-                          m.isCurrent ? 'bg-[#fef3c7] font-bold text-[#991b1b]' : 'text-slate-800'
+                        className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg border transition-all text-xs sm:text-[13.5px] ${
+                          m.isCurrent
+                            ? 'bg-amber-100/90 border-amber-400 font-extrabold text-[#991b1b] shadow-sm ring-1 ring-amber-400'
+                            : 'border-slate-100 bg-slate-50/70 text-slate-800'
                         }`}
                       >
-                        <span>{GRAHA_MAP[m.planet]?.ne}</span>
-                        <span>{new Date(m.startDate).getFullYear()}-{new Date(m.endDate).getFullYear()}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900">{GRAHA_MAP[m.planet]?.ne || m.planet}</span>
+                          {m.isCurrent && (
+                            <span className="text-[10px] bg-red-600 text-white font-black px-1.5 py-0.2 rounded-full">
+                              चालू
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-mono font-bold text-slate-700 text-xs sm:text-[13px]">
+                          {new Date(m.startDate).getFullYear()} - {new Date(m.endDate).getFullYear()}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Tribhagi Table */}
-                <div className="border border-[#78350f] rounded bg-white p-1.5">
-                  <div className="font-bold text-[#991b1b] text-center border-b border-[#78350f] pb-0.5 mb-1">
-                    त्रिभागी दशा (८० वर्ष)
+                <div className="border-2 border-[#78350f] rounded-xl bg-white shadow-md p-3 print:break-inside-avoid flex flex-col">
+                  <div className="font-bold text-[#991b1b] text-center border-b-2 border-[#d97706] pb-2 mb-2 text-sm sm:text-base font-serif bg-amber-50 -mx-3 -mt-3 p-2.5">
+                    त्रिभागी दशा (८० वर्ष महादशा)
                   </div>
-                  <div className="space-y-0.5 max-h-[110px] overflow-y-auto">
+                  <div className="space-y-1.5 pt-1">
                     {triData.mahadashas.slice(0, 9).map((m) => (
                       <div
                         key={m.planet}
-                        className={`flex justify-between px-1 rounded ${
-                          m.isCurrent ? 'bg-[#fef3c7] font-bold text-[#991b1b]' : 'text-slate-800'
+                        className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg border transition-all text-xs sm:text-[13.5px] ${
+                          m.isCurrent
+                            ? 'bg-amber-100/90 border-amber-400 font-extrabold text-[#991b1b] shadow-sm ring-1 ring-amber-400'
+                            : 'border-slate-100 bg-slate-50/70 text-slate-800'
                         }`}
                       >
-                        <span>{GRAHA_MAP[m.planet]?.ne}</span>
-                        <span>{new Date(m.startDate).getFullYear()}-{new Date(m.endDate).getFullYear()}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900">{GRAHA_MAP[m.planet]?.ne || m.planet}</span>
+                          {m.isCurrent && (
+                            <span className="text-[10px] bg-red-600 text-white font-black px-1.5 py-0.2 rounded-full">
+                              चालू
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-mono font-bold text-slate-700 text-xs sm:text-[13px]">
+                          {new Date(m.startDate).getFullYear()} - {new Date(m.endDate).getFullYear()}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
 
                 {/* Yogini Table */}
-                <div className="border border-[#78350f] rounded bg-white p-1.5">
-                  <div className="font-bold text-[#991b1b] text-center border-b border-[#78350f] pb-0.5 mb-1">
+                <div className="border-2 border-[#78350f] rounded-xl bg-white shadow-md p-3 print:break-inside-avoid flex flex-col">
+                  <div className="font-bold text-[#991b1b] text-center border-b-2 border-[#d97706] pb-2 mb-2 text-sm sm:text-base font-serif bg-amber-50 -mx-3 -mt-3 p-2.5">
                     योगिनी दशा (३६ वर्ष चक्र)
                   </div>
-                  <div className="space-y-0.5 max-h-[110px] overflow-y-auto">
+                  <div className="space-y-1.5 pt-1">
                     {yogData.mahadashas.slice(0, 8).map((m) => (
                       <div
                         key={m.yoginiName}
-                        className={`flex justify-between px-1 rounded ${
-                          m.isCurrent ? 'bg-[#fef3c7] font-bold text-[#991b1b]' : 'text-slate-800'
+                        className={`flex items-center justify-between py-1.5 px-2.5 rounded-lg border transition-all text-xs sm:text-[13.5px] ${
+                          m.isCurrent
+                            ? 'bg-amber-100/90 border-amber-400 font-extrabold text-[#991b1b] shadow-sm ring-1 ring-amber-400'
+                            : 'border-slate-100 bg-slate-50/70 text-slate-800'
                         }`}
                       >
-                        <span>{m.yoginiNameNe} ({GRAHA_MAP[m.ruler]?.ne})</span>
-                        <span>{new Date(m.startDate).getFullYear()}-{new Date(m.endDate).getFullYear()}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900">{m.yoginiNameNe}</span>
+                          <span className="text-[11px] text-amber-900">({GRAHA_MAP[m.ruler]?.ne})</span>
+                          {m.isCurrent && (
+                            <span className="text-[10px] bg-red-600 text-white font-black px-1.5 py-0.2 rounded-full">
+                              चालू
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-mono font-bold text-slate-700 text-xs sm:text-[13px]">
+                          {new Date(m.startDate).getFullYear()} - {new Date(m.endDate).getFullYear()}
+                        </span>
                       </div>
                     ))}
                   </div>

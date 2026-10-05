@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { BirthDetails, Language, ChartStyle, KundaliCalculationOutput } from './types/astrology';
+import { auth, signOut, onAuthStateChanged, syncUserProfile } from './firebase';
 import { UI_TRANSLATIONS, GRAHA_MAP, RASHI_LIST } from './utils/i18n';
 import { calculateKundali } from './engine/kundaliEngine';
 import { Header } from './components/Header';
@@ -60,21 +61,68 @@ import {
 export default function App() {
   const [language, setLanguage] = useState<Language>('ne'); // Default to Nepali
   const [chartStyle, setChartStyle] = useState<ChartStyle>('north'); // Default to North Indian
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [theme, setTheme] = useState<'dark' | 'light'>('light'); // Default to Lite mode
+  const [chartDisplayTab, setChartDisplayTab] = useState<'d1' | 'd9' | 'both'>('d1'); // Default to large D1 view
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isSavedProfilesOpen, setIsSavedProfilesOpen] = useState(false);
 
-  const [currentUser, setCurrentUser] = useState<{ name: string; identifier: string; provider: string } | null>(() => {
+  const [currentUser, setCurrentUser] = useState<{
+    name: string;
+    identifier: string;
+    provider: string;
+    uid?: string;
+    photoURL?: string;
+    role?: string;
+  } | null>(() => {
     const saved = localStorage.getItem('vaidik_jyotish_user');
     return saved ? JSON.parse(saved) : null;
   });
 
-  const handleLoginSuccess = (user: { name: string; identifier: string; provider: string }) => {
+  // Listen to genuine Firebase Auth state changes
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const profile = await syncUserProfile(firebaseUser);
+          const userData = {
+            name: profile.displayName || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
+            identifier: profile.email || firebaseUser.email || firebaseUser.uid,
+            provider: 'google',
+            uid: firebaseUser.uid,
+            photoURL: profile.photoURL || firebaseUser.photoURL || '',
+            role: profile.role,
+          };
+          setCurrentUser(userData);
+          localStorage.setItem('vaidik_jyotish_user', JSON.stringify(userData));
+        } catch (e) {
+          console.warn('Error syncing auth profile:', e);
+        }
+      } else {
+        // No verified Firebase session: user must log in
+        setCurrentUser(null);
+        localStorage.removeItem('vaidik_jyotish_user');
+      }
+    });
+
+    return () => unsub();
+  }, []);
+
+  const handleLoginSuccess = (user: {
+    name: string;
+    identifier: string;
+    provider: string;
+    uid?: string;
+    photoURL?: string;
+    role?: string;
+  }) => {
     setCurrentUser(user);
     localStorage.setItem('vaidik_jyotish_user', JSON.stringify(user));
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {}
     setCurrentUser(null);
     localStorage.removeItem('vaidik_jyotish_user');
   };
@@ -333,14 +381,96 @@ export default function App() {
                     );
                   })()}
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                    {/* Primary Kundali Chart */}
-                    <div className="space-y-4">
+                  {/* Kundali View Controls (Large View & Tab Switcher) */}
+                  <div className={`p-3 sm:p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3 ${
+                    isDark ? 'bg-slate-900/90 border-amber-900/40 text-slate-100' : 'bg-amber-50/90 border-amber-200 text-slate-900'
+                  }`}>
+                    {/* Large View Selection Tabs */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-amber-700 dark:text-amber-400 mr-1">
+                        {isNe ? 'कुण्डली दृश्य:' : 'Chart View:'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setChartDisplayTab('d1')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          chartDisplayTab === 'd1'
+                            ? 'bg-amber-600 text-white shadow-md'
+                            : isDark ? 'bg-slate-800 text-slate-300 hover:text-white' : 'bg-white text-slate-700 hover:bg-amber-100 border border-amber-200'
+                        }`}
+                      >
+                        ☀️ {isNe ? 'D1 जन्म कुण्डली (ठूलो स्पष्ट)' : 'D1 Birth Chart (Large)'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChartDisplayTab('d9')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          chartDisplayTab === 'd9'
+                            ? 'bg-amber-600 text-white shadow-md'
+                            : isDark ? 'bg-slate-800 text-slate-300 hover:text-white' : 'bg-white text-slate-700 hover:bg-amber-100 border border-amber-200'
+                        }`}
+                      >
+                        ☸️ {isNe ? 'D9 नवांश कुण्डली (ठूलो)' : 'D9 Navamsa (Large)'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChartDisplayTab('both')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          chartDisplayTab === 'both'
+                            ? 'bg-amber-600 text-white shadow-md'
+                            : isDark ? 'bg-slate-800 text-slate-300 hover:text-white' : 'bg-white text-slate-700 hover:bg-amber-100 border border-amber-200'
+                        }`}
+                      >
+                        📑 {isNe ? 'दुवै कुण्डली (D1 + D9)' : 'Both Side-by-Side'}
+                      </button>
+                    </div>
+
+                    {/* Chart Style Switcher (North / South / East) */}
+                    <div className="flex items-center gap-1 bg-amber-100/60 dark:bg-slate-800 p-1 rounded-xl border border-amber-300/60 dark:border-slate-700 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setChartStyle('north')}
+                        className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                          chartStyle === 'north'
+                            ? 'bg-amber-600 text-white shadow'
+                            : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-amber-900'
+                        }`}
+                      >
+                        {isNe ? 'उत्तरी' : 'North'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChartStyle('south')}
+                        className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                          chartStyle === 'south'
+                            ? 'bg-amber-600 text-white shadow'
+                            : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-amber-900'
+                        }`}
+                      >
+                        {isNe ? 'दक्षिणी' : 'South'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setChartStyle('east')}
+                        className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
+                          chartStyle === 'east'
+                            ? 'bg-amber-600 text-white shadow'
+                            : isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-amber-900'
+                        }`}
+                      >
+                        {isNe ? 'पूर्वीय' : 'East'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Kundali Render Section */}
+                  {chartDisplayTab === 'd1' ? (
+                    <div className="w-full max-w-[620px] mx-auto">
                       {chartStyle === 'north' ? (
                         <NorthIndianChart
                           data={kundaliData}
                           language={language}
-                          title={isNe ? 'D1 जन्म कुण्डली (उत्तरी भारतीय)' : 'D1 Birth Kundali (North Indian)'}
+                          title={isNe ? 'D1 जन्म कुण्डली (ठूलो स्पष्ट दृश्य)' : 'D1 Birth Kundali (Large View)'}
                           theme={theme}
                         />
                       ) : chartStyle === 'south' ? (
@@ -359,9 +489,8 @@ export default function App() {
                         />
                       )}
                     </div>
-
-                    {/* D9 Navamsa Chart Preview */}
-                    <div className="space-y-4">
+                  ) : chartDisplayTab === 'd9' ? (
+                    <div className="w-full max-w-[620px] mx-auto">
                       {chartStyle === 'north' ? (
                         <NorthIndianChart
                           data={{
@@ -376,7 +505,7 @@ export default function App() {
                             }),
                           }}
                           language={language}
-                          title={isNe ? 'D9 नवांश कुण्डली (उत्तरी भारतीय)' : 'D9 Navamsa Chart (North Indian)'}
+                          title={isNe ? 'D9 नवांश कुण्डली (ठूलो स्पष्ट दृश्य)' : 'D9 Navamsa Chart (Large View)'}
                           theme={theme}
                         />
                       ) : chartStyle === 'south' ? (
@@ -415,7 +544,91 @@ export default function App() {
                         />
                       )}
                     </div>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                      {/* Primary Kundali Chart */}
+                      <div className="space-y-4">
+                        {chartStyle === 'north' ? (
+                          <NorthIndianChart
+                            data={kundaliData}
+                            language={language}
+                            title={isNe ? 'D1 जन्म कुण्डली (उत्तरी भारतीय)' : 'D1 Birth Kundali (North Indian)'}
+                            theme={theme}
+                          />
+                        ) : chartStyle === 'south' ? (
+                          <SouthIndianChart
+                            data={kundaliData}
+                            language={language}
+                            title={isNe ? 'D1 जन्म कुण्डली (दक्षिणी भारतीय)' : 'D1 Birth Kundali (South Indian)'}
+                            theme={theme}
+                          />
+                        ) : (
+                          <EastIndianChart
+                            data={kundaliData}
+                            language={language}
+                            title={isNe ? 'D1 जन्म कुण्डली (पूर्वीय भारतीय)' : 'D1 Birth Kundali (East Indian)'}
+                            theme={theme}
+                          />
+                        )}
+                      </div>
+
+                      {/* D9 Navamsa Chart Preview */}
+                      <div className="space-y-4">
+                        {chartStyle === 'north' ? (
+                          <NorthIndianChart
+                            data={{
+                              ...kundaliData,
+                              ascendant: {
+                                ...kundaliData.ascendant,
+                                signIndex: kundaliData.divisionalCharts?.[1]?.ascendantSignIndex ?? kundaliData.ascendant.signIndex,
+                              },
+                              grahas: kundaliData.grahas.map((g) => {
+                                const p = kundaliData.divisionalCharts?.[1]?.positions?.find((pos) => pos.graha === g.name);
+                                return { ...g, signIndex: p ? p.signIndex : g.signIndex, house: p ? p.house : g.house };
+                              }),
+                            }}
+                            language={language}
+                            title={isNe ? 'D9 नवांश कुण्डली (उत्तरी भारतीय)' : 'D9 Navamsa Chart (North Indian)'}
+                            theme={theme}
+                          />
+                        ) : chartStyle === 'south' ? (
+                          <SouthIndianChart
+                            data={{
+                              ...kundaliData,
+                              ascendant: {
+                                ...kundaliData.ascendant,
+                                signIndex: kundaliData.divisionalCharts?.[1]?.ascendantSignIndex ?? kundaliData.ascendant.signIndex,
+                              },
+                              grahas: kundaliData.grahas.map((g) => {
+                                const p = kundaliData.divisionalCharts?.[1]?.positions?.find((pos) => pos.graha === g.name);
+                                return { ...g, signIndex: p ? p.signIndex : g.signIndex, house: p ? p.house : g.house };
+                              }),
+                            }}
+                            language={language}
+                            title={isNe ? 'D9 नवांश कुण्डली (दक्षिणी भारतीय)' : 'D9 Navamsa Chart (South Indian)'}
+                            theme={theme}
+                          />
+                        ) : (
+                          <EastIndianChart
+                            data={{
+                              ...kundaliData,
+                              ascendant: {
+                                ...kundaliData.ascendant,
+                                signIndex: kundaliData.divisionalCharts?.[1]?.ascendantSignIndex ?? kundaliData.ascendant.signIndex,
+                              },
+                              grahas: kundaliData.grahas.map((g) => {
+                                const p = kundaliData.divisionalCharts?.[1]?.positions?.find((pos) => pos.graha === g.name);
+                                return { ...g, signIndex: p ? p.signIndex : g.signIndex, house: p ? p.house : g.house };
+                              }),
+                            }}
+                            language={language}
+                            title={isNe ? 'D9 नवांश कुण्डली (पूर्वीय भारतीय)' : 'D9 Navamsa Chart (East Indian)'}
+                            theme={theme}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Planetary Table (Graha Spasta) below Kundali */}
                   <PlanetaryTable data={kundaliData} language={language} theme={theme} />

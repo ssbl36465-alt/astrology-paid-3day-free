@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ZegoUIKitPrebuilt } from '@zegocloud/zego-uikit-prebuilt';
 import { FileText, ChevronDown, ChevronUp, User, Calendar, Clock, MapPin, Sparkles, Wallet, Timer } from 'lucide-react';
+import { saveGuruToFirestore, syncGurusFromFirestore } from '../firebase';
 
 export default function ZegoCall({
   appID,
@@ -65,20 +66,19 @@ export default function ZegoCall({
       setUserBalance(newBalance);
       localStorage.setItem('vaidik_client_wallet_balance', newBalance.toString());
 
-      // Update Astrologer earnings in localStorage/database
+      // Update Astrologer earnings in Firebase Firestore & backend
       try {
-        const gurusData = JSON.parse(localStorage.getItem('vaidik_jyotish_gurus') || '[]');
-        const updatedGurus = gurusData.map((g) => {
-          if (calleeID && String(g.id) === String(calleeID)) {
-            return {
-              ...g,
-              totalEarningsRs: (g.totalEarningsRs || 0) + astrologerRatePerMinute,
-              consultationMinutes: (g.consultationMinutes || 0) + 1,
+        syncGurusFromFirestore().then((gurus) => {
+          const target = gurus.find((g) => calleeID && String(g.id) === String(calleeID));
+          if (target) {
+            const updatedGuru = {
+              ...target,
+              totalEarningsRs: (target.totalEarningsRs || 0) + astrologerRatePerMinute,
+              consultationMinutes: (target.consultationMinutes || 0) + 1,
             };
+            saveGuruToFirestore(updatedGuru);
           }
-          return g;
         });
-        localStorage.setItem('vaidik_jyotish_gurus', JSON.stringify(updatedGurus));
       } catch (e) {}
       
       // API Call for backend synchronization
