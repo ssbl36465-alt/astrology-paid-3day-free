@@ -6,8 +6,11 @@ import {
   db, 
   GURUS_COLLECTION, 
   GURU_APPLICATIONS_COLLECTION,
-  saveGuruToFirestore, 
-  saveApplicationToFirestore, 
+  listenToGurus,
+  registerGuruApplication,
+  listenToGuruApplications,
+  saveGuruToFirebase,
+  saveGuruToFirestore,
   saveBookingToFirestore, 
   saveRechargeToFirestore,
   setUserRole
@@ -113,48 +116,24 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
   const [gurus, setGurus] = useState<GuruProfile[]>([]);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
   const [isMyDashboardOpen, setIsMyDashboardOpen] = useState(false);
-  const [myGuruId, setMyGuruId] = useState<string>(() => localStorage.getItem('vaidik_my_guru_id') || '');
-  const [myGuruAppId, setMyGuruAppId] = useState<string>(() => localStorage.getItem('vaidik_my_guru_app_id') || '');
+  const [myGuruId, setMyGuruId] = useState<string>('');
+  const [myGuruAppId, setMyGuruAppId] = useState<string>('');
 
   useEffect(() => {
-    // Live fetching from Firebase /gurus (filtered strictly by status: 'approved')
-    let isMounted = true;
-    try {
-      const unsub = onSnapshot(collection(db, GURUS_COLLECTION), (snapshot) => {
-        if (!isMounted) return;
-        if (!snapshot.empty) {
-          const approvedList: GuruProfile[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data() as GuruProfile;
-            // Filter live from Firebase by status: 'approved'
-            if (data.status === 'approved' || (data as any).approvalStatus === 'approved') {
-              approvedList.push({
-                ...data,
-                id: docSnap.id,
-                status: 'approved',
-                availability: data.availability || (data.status === 'approved' ? 'online' : (data.status as any)) || 'online',
-                ratingCount: data.ratingCount || 1,
-              });
-            }
-          });
-          setGurus(approvedList);
-        } else {
-          // If Firebase is brand new and empty, seed verified initial gurus directly into Firebase with status: 'approved'
-          INITIAL_GURUS.forEach((g) => {
-            saveGuruToFirestore(g);
-          });
-        }
-      }, (err) => {
-        console.warn('Firestore gurus subscription warning:', err);
-      });
+    // 4. Client Guru List MUST read directly from Firebase /gurus. ZERO localStorage!
+    const unsub = listenToGurus((list) => {
+      const approvedList = list
+        .filter((g) => g.status === 'approved' || (g as any).approvalStatus === 'approved')
+        .map((g) => ({
+          ...g,
+          status: 'approved' as const,
+          availability: g.availability || (g.status === 'approved' ? 'online' : (g.status as any)) || 'online',
+          ratingCount: g.ratingCount || 1,
+        }));
+      setGurus(approvedList);
+    });
 
-      return () => {
-        isMounted = false;
-        unsub();
-      };
-    } catch (e) {
-      console.warn('Failed to attach Firestore listener:', e);
-    }
+    return () => unsub();
   }, []);
 
   const [selectedGuru, setSelectedGuru] = useState<GuruProfile | null>(null);
@@ -171,7 +150,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
   useEffect(() => {
     if (!myGuruAppId) return;
 
-    let previousStatus = localStorage.getItem(`status_${myGuruAppId}`) || 'pending';
+    let previousStatus = 'pending';
 
     const unsub = onSnapshot(doc(db, GURU_APPLICATIONS_COLLECTION, myGuruAppId), (docSnap) => {
       if (docSnap.exists()) {
@@ -181,9 +160,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
         // When status transitions from 'pending' to 'approved'
         if (currentStatus === 'approved' && previousStatus === 'pending') {
           const guruId = appData.guruId || myGuruAppId.replace('app-', 'guru-');
-          localStorage.setItem('vaidik_my_guru_id', guruId);
           setMyGuruId(guruId);
-          localStorage.setItem(`status_${myGuruAppId}`, 'approved');
           previousStatus = 'approved';
 
           setApprovalAlert({
@@ -217,10 +194,8 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
         } else if (currentStatus === 'approved') {
           const guruId = appData.guruId || myGuruAppId.replace('app-', 'guru-');
           if (!myGuruId) {
-            localStorage.setItem('vaidik_my_guru_id', guruId);
             setMyGuruId(guruId);
           }
-          localStorage.setItem(`status_${myGuruAppId}`, 'approved');
         }
       }
     }, (err) => {
@@ -774,9 +749,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       return;
     }
 
-    const appId = 'app-' + Date.now();
     const newApp = {
-      id: appId,
       name: regName,
       age: parseInt(regAge) || 35,
       experienceYears: parseInt(regExperience) || 5,
@@ -785,24 +758,21 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
       otherDetails: regOtherDetails || 'विशेषज्ञ ज्योतिष सेवा।',
       phone: regPhone,
       certificateUrl: regCertificateFile,
-      createdAt: Date.now(),
       createdAtIso: new Date().toISOString(),
-      status: 'pending', // 1. Form Submission: write application data directly to Firebase path /guru_applications
+      status: 'pending',
     };
 
-    // 1. Write directly to Firebase path /guru_applications without any localStorage fallbacks
+    // 1. When a Guru registers, immediately write to Firebase Realtime Database path /guru_applications using push(). Do NOT write to localStorage.
     try {
-      await saveApplicationToFirestore(newApp);
+      const generatedAppId = await registerGuruApplication(newApp);
+      setMyGuruAppId(generatedAppId);
     } catch (err: any) {
-      console.error('Failed to submit application to Firebase:', err);
+      console.error('Failed to submit application to Firebase Realtime Database:', err);
       setRegError(isNe ? 'Firebase डेटाबेसमा सेभ गर्न सकिएन। कृपया पुनः प्रयास गर्नुहोस्।' : 'Failed to save to Firebase. Please try again.');
       return;
     }
 
-    localStorage.setItem('vaidik_my_guru_app_id', appId);
-    setMyGuruAppId(appId);
-
-    setRegSuccess(isNe ? 'तपाईंको आवेदन सिधै Firebase डेटाबेसमा सफलतापूर्वक पेस भयो! एडमिनबाट स्वीकृत भएपछि प्रोफाइल सबै डिभाइसमा अनलाइन देखिनेछ।' : 'Application submitted directly to Firebase Database! Your profile will appear on all devices once approved by admin.');
+    setRegSuccess(isNe ? 'तपाईंको आवेदन सिधै Firebase Realtime Database मा सफलतापूर्वक पेस भयो! एडमिनबाट स्वीकृत भएपछि प्रोफाइल सबै डिभाइसमा अनलाइन देखिनेछ।' : 'Application submitted directly to Firebase Realtime Database! Your profile will appear on all devices once approved by admin.');
     setRegError('');
     setTimeout(() => {
       setIsRegisterOpen(false);
@@ -949,30 +919,7 @@ export const GurusDirectory: React.FC<GurusDirectoryProps> = ({ language, onOpen
         </div>
       </div>
 
-      {/* In-App Direct Consultation Features Banner */}
-      <div className="bg-slate-900/90 border border-emerald-500/30 rounded-xl px-3.5 py-2 flex items-center justify-between flex-wrap gap-2 text-xs">
-        <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></div>
-          <span className="font-bold text-amber-200">
-            {isNe ? '✨ १००% एपभित्रै उपलब्ध सुविधाहरू:' : '✨ 100% In-App Services Available:'}
-          </span>
-          <span className="text-slate-300 hidden md:inline">
-            {isNe ? 'च्याट, अडियो कल र भिडियो कल सिधै यही एपभित्रै चल्छ (कुनै बाह्य नम्बर/एप चाहिँदैन)' : 'Chat, Audio Call & Video Call directly in-app'}
-          </span>
-        </div>
 
-        <div className="flex items-center gap-1.5 font-bold text-[11px]">
-          <span className="bg-slate-800 text-amber-300 border border-slate-700 px-2.5 py-1 rounded-lg flex items-center gap-1">
-            <MessageSquare className="w-3 h-3 text-amber-400" /> {isNe ? 'च्याट' : 'Chat'}
-          </span>
-          <span className="bg-emerald-950 text-emerald-300 border border-emerald-700 px-2.5 py-1 rounded-lg flex items-center gap-1">
-            <Phone className="w-3 h-3 text-emerald-400" /> {isNe ? 'अडियो कल' : 'Audio Call'}
-          </span>
-          <span className="bg-amber-600/20 text-amber-300 border border-amber-500/50 px-2.5 py-1 rounded-lg flex items-center gap-1">
-            <Video className="w-3 h-3 text-amber-400" /> {isNe ? 'भिडियो कल' : 'Video Call'}
-          </span>
-        </div>
-      </div>
 
       {/* Ultra-Compact Gurus Grid */}
       <div className="max-h-[360px] overflow-y-auto pr-1 space-y-2">

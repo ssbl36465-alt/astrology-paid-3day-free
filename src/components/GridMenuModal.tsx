@@ -65,8 +65,8 @@ export const GridMenuModal: React.FC<GridMenuModalProps> = ({
     },
     {
       id: 'traditionalPatrika',
-      nameNe: 'पारम्परिक पत्रिका',
-      nameEn: 'Traditional Patrika',
+      nameNe: 'चिना',
+      nameEn: 'Kundali / China',
       icon: <Scroll className="w-6 h-6 text-purple-400" />,
       bg: 'bg-purple-500/10 border-purple-500/30',
     },

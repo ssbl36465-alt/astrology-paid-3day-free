@@ -66,6 +66,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isSavedProfilesOpen, setIsSavedProfilesOpen] = useState(false);
 
+  // Strictly enforce genuine Firebase Authentication:
+  // Never restore unverified sessions from localStorage!
+  // Initialize to null and verify strictly through Firebase Auth.
   const [currentUser, setCurrentUser] = useState<{
     name: string;
     identifier: string;
@@ -73,12 +76,10 @@ export default function App() {
     uid?: string;
     photoURL?: string;
     role?: string;
-  } | null>(() => {
-    const saved = localStorage.getItem('vaidik_jyotish_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  } | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
 
-  // Listen to genuine Firebase Auth state changes
+  // Listen strictly to genuine Firebase Auth state changes
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
@@ -96,12 +97,15 @@ export default function App() {
           localStorage.setItem('vaidik_jyotish_user', JSON.stringify(userData));
         } catch (e) {
           console.warn('Error syncing auth profile:', e);
+          setCurrentUser(null);
+          localStorage.removeItem('vaidik_jyotish_user');
         }
       } else {
         // No verified Firebase session: user must log in
         setCurrentUser(null);
         localStorage.removeItem('vaidik_jyotish_user');
       }
+      setIsAuthChecking(false);
     });
 
     return () => unsub();
@@ -122,7 +126,9 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('SignOut error:', e);
+    }
     setCurrentUser(null);
     localStorage.removeItem('vaidik_jyotish_user');
   };
@@ -170,6 +176,17 @@ export default function App() {
   const handlePrint = () => {
     window.print();
   };
+
+  if (isAuthChecking) {
+    return (
+      <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-amber-200' : 'bg-slate-900 text-amber-100'} flex flex-col items-center justify-center gap-3 font-serif`}>
+        <div className="w-10 h-10 border-3 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm tracking-wide">
+          {isNe ? 'Google प्रमाणीकरण जाँच गर्दै...' : 'Verifying Google authentication...'}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-100 text-slate-900'} font-sans selection:bg-amber-500 selection:text-slate-950 transition-colors duration-200`}>

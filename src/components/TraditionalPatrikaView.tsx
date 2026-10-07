@@ -278,10 +278,10 @@ export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
         <div>
           <h2 className="text-lg sm:text-xl font-serif font-bold text-amber-200 flex items-center gap-2">
             <Scroll className="w-6 h-6 text-amber-400" />
-            परम्परागत नेपाली हस्तलिखित शैली चिना (Traditional Nepalese Patrika)
+            चिना (Kundali)
           </h2>
           <p className="text-xs text-amber-300/80 mt-1">
-            नेपाली परम्परा अनुसार निर्मित २-पेजको मुद्रणयोग्य (Print-Ready A4) विस्तृत जन्म कुण्डली तथा पञ्चाङ्ग चिना पत्र।
+            मुद्रणयोग्य (Print-Ready A4) जन्म कुण्डली तथा पञ्चाङ्ग चिना।
           </p>
         </div>
 
@@ -453,7 +453,7 @@ export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
               </div>
               <div className="text-xl sm:text-2xl font-black text-[#78350f] font-serif py-1 flex items-center justify-center gap-2">
                 <span>🚩</span>
-                <span>अथ जन्म पत्रिका तथा पञ्चाङ्ग विवरण</span>
+                <span>अथ जन्म चिना तथा पञ्चाङ्ग विवरण</span>
                 <span>🚩</span>
               </div>
               <p className="text-xs text-[#881337] italic font-semibold max-w-xl mx-auto">
@@ -590,7 +590,7 @@ export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
 
             {/* Page 1 Footer stamp */}
             <div className="text-center text-[10px] text-[#78350f] pt-2 border-t border-[#d97706]/50 mt-2 flex items-center justify-between">
-              <span>नेपाल परम्परागत जन्म कुण्डली (पृष्ठ १ / २)</span>
+              <span>जन्म कुण्डली तथा चिना (पृष्ठ १ / २)</span>
               <span>लाहिरी अयनांश: {data.audit.lahiriAyanamsaFormatted}</span>
             </div>
 
@@ -823,7 +823,7 @@ export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
 
             {/* Page 2 Footer stamp */}
             <div className="text-center text-[10px] text-[#78350f] pt-2 border-t border-[#d97706]/50 mt-2 flex items-center justify-between">
-              <span>नेपाल परम्परागत जन्म कुण्डली {includeSubperiodsInPrint ? '(पृष्ठ २ / ३)' : '(पृष्ठ २ / २)'}</span>
+              <span>जन्म कुण्डली तथा चिना {includeSubperiodsInPrint ? '(पृष्ठ २ / ३)' : '(पृष्ठ २ / २)'}</span>
               <span>वैदिक जन्म कुण्डली इन्जिन स्वचलित गणना प्रणाली</span>
             </div>
 
@@ -860,7 +860,7 @@ export const TraditionalPatrikaView: React.FC<TraditionalPatrikaViewProps> = ({
               </div>
 
               <div className="text-center text-[10px] text-[#78350f] pt-2 border-t border-[#d97706]/50 mt-4 flex items-center justify-between">
-                <span>नेपाल परम्परागत जन्म कुण्डली (पृष्ठ ३ / ३ - अन्तर्दशा विवरण)</span>
+                <span>जन्म कुण्डली तथा चिना (पृष्ठ ३ / ३ - अन्तर्दशा विवरण)</span>
                 <span>वैदिक जन्म कुण्डली इन्जिन स्वचलित गणना प्रणाली</span>
               </div>
             </div>

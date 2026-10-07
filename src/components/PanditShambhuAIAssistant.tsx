@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { KundaliCalculationOutput, Language } from '../types/astrology';
 import { Send, Sparkles, User, RefreshCw, MessageSquare } from 'lucide-react';
+import { generateIntelligentAnswer, KundaliContextData } from '../utils/aiKnowledgeEngine';
 
 interface PanditShambhuAIAssistantProps {
   data: KundaliCalculationOutput;
@@ -44,65 +45,22 @@ export const PanditShambhuAIAssistant: React.FC<PanditShambhuAIAssistantProps> =
         'What can you tell me about my current dasha and upcoming periods?',
       ];
 
-  // Client-side fallback with strict intent understanding (Never forcing astrology on greetings/general Qs)
+  // Client-side intelligent engine with strict intent understanding (Never forcing astrology on greetings/general Qs)
+  const kundaliContext: KundaliContextData = {
+    name: data.birthDetails?.name,
+    lagnaNe: data.ascendant?.signNameNe,
+    lagnaEn: data.ascendant?.signNameEn,
+    moonSignNe: moon?.signNameNe,
+    moonSignEn: moon?.signNameEn,
+    sunSignNe: sun?.signNameNe,
+    sunSignEn: sun?.signNameEn,
+    dob: data.birthDetails?.dob,
+    tob: data.birthDetails?.tob,
+    pob: data.birthDetails?.pob,
+  };
+
   const getSmartClientFallback = (query: string): string => {
-    const q = query.trim().toLowerCase();
-    const lagna = isNe ? data.ascendant.signNameNe : data.ascendant.signNameEn;
-    const moonSign = isNe ? moon?.signNameNe : moon?.signNameEn;
-
-    // 1. Casual Greetings -> NO ASTROLOGY FORCED!
-    const greetings = ['hello', 'hi', 'hey', 'namaste', 'namaskar', 'नमस्ते', 'नमस्कार', 'ह्यालो', 'हेलो', 'गुड मर्निंग', 'good morning'];
-    const isGreeting = greetings.some((g) => q === g || q.startsWith(g + ' ') || q.endsWith(' ' + g) || q === g + '!');
-    if (isGreeting && q.length < 30) {
-      return isNe
-        ? 'नमस्कार! म तपाईंलाई आज कसरी सहयोग गर्न सक्छु? हजुरको कुनै पनि सामान्य जिज्ञासा, दैनिक प्रश्न वा कुण्डली सम्बन्धी केही बुझ्न मन भए निर्धक्क सोध्नुहोस्।'
-        : 'Hello! How can I help you today? Please feel free to ask any question or astrological inquiry.';
-    }
-
-    // 2. Questions asking "who are you" / "what can you do"
-    if (q.includes('who are you') || q.includes('who r u') || q.includes('तपाईं को') || q.includes('तपाई को') || q.includes('के गर्न सक्छ')) {
-      return isNe
-        ? 'म वैदिक ज्योतिष पोर्टलको बौद्धिक AI सहायक हुँ। म तपाईंलाई सामान्य ज्ञान, दैनिक जीवनका प्रश्नहरू, अध्ययन, प्रविधिदेखि लिएर तपाईंको कुण्डली, ग्रह-दशा र ज्योतिषीय विश्लेषणसम्म सबै कुरामा ChatGPT र Gemini जस्तै सही र स्पष्ट उत्तर दिन सक्छु। मलाई जे पनि सोध्न सक्नुहुन्छ!'
-        : 'I am the intelligent AI Assistant for this portal. Just like ChatGPT and Gemini, I can answer all types of questions—from general knowledge, science, and everyday life to personalized Vedic astrological analysis based on your birth chart.';
-    }
-
-    // 3. How are you / कस्तो छ
-    if (q.includes('how are you') || q.includes('how r u') || q.includes('kasto cha') || q.includes('कस्तो छ') || q.includes('के छ') || q.includes('ke cha')) {
-      return isNe
-        ? 'म एकदम ठीक छु, धन्यवाद! हजुरलाई कस्तो छ? आज हजुरलाई के सहयोग गर्न सक्छु?'
-        : 'I am doing great, thank you! How are you doing today? How may I assist you?';
-    }
-
-    // 4. Thank you
-    if (q.includes('thank') || q.includes('dhanyabad') || q.includes('धन्यवाद')) {
-      return isNe
-        ? 'हजुरलाई धेरै धेरै स्वागत छ! अरु केही जान्न वा सोध्न मन भए निसङ्कोच सोध्नुहोला।'
-        : 'You are very welcome! Feel free to ask if you have any other questions.';
-    }
-
-    // 5. Specific Astrology questions:
-    if (q.includes('करियर') || q.includes('व्यापार') || q.includes('नौकरी') || q.includes('job') || q.includes('business') || q.includes('career') || q.includes('work')) {
-      return isNe
-        ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: तपाईंको लग्न '${lagna}' र चन्द्रमा '${moonSign}' राशीमा हुनुहुन्छ। दशम भाव (कर्म भाव) र सूर्य/शनि गोचरको प्रभाव अनुसार तपाईंले प्रशासनिक क्षेत्र, व्यवस्थापन, परामर्श सेवा (Consultancy), वा आफ्नै स्वतन्त्र व्यवसायमा असाधारण सफलता पाउन सक्नुहुन्छ। कडा मेहनत र इमानदारीले तपाईंको पेशागत जीवनमा ठूलो उन्नति गराउनेछ।`
-        : `Pandit Shambhu Prasad Lamsal's Analysis: With Ascendant in '${lagna}' and Moon in '${moonSign}', your 10th house indicates stellar potential in leadership, enterprise, management, or professional consultancy. Dedication and ethical hard work will bring immense professional success.`;
-    }
-
-    if (q.includes('बिहे') || q.includes('प्रेम') || q.includes('विवाह') || q.includes('marriage') || q.includes('love') || q.includes('spouse') || q.includes('relationship')) {
-      return isNe
-        ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: सप्तम भाव (जीवनसाथी भाव) र शुक्र ग्रहको स्थिति अनुसार वैवाहिक जीवन र प्रेम सम्बन्धमा समझदारी र आपसी सहयोग महत्त्वपूर्ण हुन्छ। '${lagna}' लग्नको स्वभाव अनुसार धैर्य र प्रेमपूर्वक सम्बन्ध अगाडि बढाउँदा जीवनमा सुखमय पारिवारिक वातावरण प्राप्त हुन्छ।`
-        : `Pandit Shambhu Prasad Lamsal's Analysis: Examining the 7th house and Venus placement, your marital and relationship harmony thrives on mutual respect and open communication. Your '${lagna}' ascendant nature ensures deep emotional bonding when patience is practiced.`;
-    }
-
-    if (q.includes('धन') || q.includes('पैसा') || q.includes('आर्थिक') || q.includes('wealth') || q.includes('money') || q.includes('finance')) {
-      return isNe
-        ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: द्वितीय (धन भाव) र एकादश (लाभ भाव) को बल अनुसार तपाईंको आर्थिक स्थिति स्थिर र प्रगतितर्फ उन्मुख छ। उचित लगानी, सुनियोजित बचत र देवगुरु वृहस्पति तथा माता लक्ष्मीको कृपाले तपाईंलाई धन-सम्पत्ति र भौतिक सुखमा वृद्धिको योग बनाइरहेको छ।`
-        : `Pandit Shambhu Prasad Lamsal's Analysis: Based on your 2nd and 11th houses, financial stability and prosperity are strongly favored through wise investments, disciplined savings, and auspicious planetary transits supporting steady wealth generation.`;
-    }
-
-    // 6. General question fallback
-    return isNe
-      ? `तपाईंको जिज्ञासा "${query}" को सम्बन्धमा: म हजुरलाई हरेक विषयमा सल्लाह र सही जानकारी दिन सक्छु। कृपया आफ्नो प्रश्न अझ खुलाएर सोध्नुहोला, म तुरुन्तै स्पष्ट उत्तर दिनेछु!`
-      : `Regarding your question "${query}": I am here to help with accurate answers on any topic. Please feel free to elaborate!`;
+    return generateIntelligentAnswer(query, kundaliContext, language);
   };
 
   const handleSend = async (textToSend?: string) => {

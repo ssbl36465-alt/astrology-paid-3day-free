@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Language } from '../types/astrology';
 import { Compass, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
-import { authenticateGoogleWithPopup } from '../firebase';
+import { auth, signOut, authenticateGoogleWithPopup } from '../firebase';
 
 interface AuthModalProps {
   language: Language;
@@ -46,6 +46,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ language, onLoginSuccess }
       console.error('Firebase Google Authentication Error:', err);
 
       // STRICT ENFORCEMENT: Never allow bypass, fallback or mock logins on failure/cancellation!
+      try {
+        await signOut(auth);
+      } catch (e) {}
+      localStorage.removeItem('vaidik_jyotish_user');
+
       const errorMsg = 'Google Authentication failed. Please select a valid Google Account.';
       setError(errorMsg);
       alert(errorMsg);

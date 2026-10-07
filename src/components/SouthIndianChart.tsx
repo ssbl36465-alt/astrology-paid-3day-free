@@ -74,6 +74,13 @@ export const SouthIndianChart: React.FC<SouthIndianChartProps> = ({
     }
   };
 
+  const getGrahaLabel = (name: string, nepali: boolean) => {
+    if (name === 'Saturn' || name === 'शनि') return nepali ? 'शनि' : 'Sa';
+    const grahaInfo = GRAHA_MAP[name as GrahaName];
+    if (grahaInfo) return nepali ? grahaInfo.ne : name.substring(0, 2);
+    return name;
+  };
+
   // Smart Anti-Collision Planet Placer for 100x100 Grid Cell
   const renderCellPlanets = (
     pList: { name: GrahaName; degStr: string; isRetro: boolean }[],
@@ -84,7 +91,7 @@ export const SouthIndianChart: React.FC<SouthIndianChartProps> = ({
 
     if (pList.length === 1) {
       const p = pList[0];
-      const label = isNe ? GRAHA_MAP[p.name].ne : p.name.substring(0, 2);
+      const label = getGrahaLabel(p.name, isNe);
       const retroTag = p.isRetro ? (isNe ? '(व)' : '(R)') : '';
       const color = getGrahaColor(p.name, isDark);
 
@@ -107,7 +114,7 @@ export const SouthIndianChart: React.FC<SouthIndianChartProps> = ({
       return (
         <>
           {pList.map((p, idx) => {
-            const label = isNe ? GRAHA_MAP[p.name].ne : p.name.substring(0, 2);
+            const label = getGrahaLabel(p.name, isNe);
             const retroTag = p.isRetro ? (isNe ? '(व)' : '(R)') : '';
             const color = getGrahaColor(p.name, isDark);
             const yPos = y0 + 46 + idx * 22;
@@ -135,7 +142,7 @@ export const SouthIndianChart: React.FC<SouthIndianChartProps> = ({
       return (
         <>
           {pList.map((p, idx) => {
-            const label = isNe ? GRAHA_MAP[p.name].ne : p.name.substring(0, 2);
+            const label = getGrahaLabel(p.name, isNe);
             const retroTag = p.isRetro ? (isNe ? '(व)' : '(R)') : '';
             const color = getGrahaColor(p.name, isDark);
             const yPos = y0 + 38 + idx * 18;
@@ -163,7 +170,7 @@ export const SouthIndianChart: React.FC<SouthIndianChartProps> = ({
     return (
       <>
         {pList.map((p, idx) => {
-          const label = isNe ? GRAHA_MAP[p.name].ne : p.name.substring(0, 2);
+          const label = getGrahaLabel(p.name, isNe);
           const retroTag = p.isRetro ? (isNe ? '(व)' : '(R)') : '';
           const color = getGrahaColor(p.name, isDark);
 

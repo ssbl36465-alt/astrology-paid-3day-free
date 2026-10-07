@@ -76,7 +76,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             <Scroll className="w-8 h-8" />
           </div>
           <h3 className="text-xl sm:text-2xl font-serif font-bold text-amber-200">
-            परम्परागत नेपाली पत्रिका सदस्यता
+            चिना सदस्यता
           </h3>
           <p className="text-xs sm:text-sm text-slate-300">
             यो विशेष सुविधा हेर्नको लागि कृपया सदस्यता लिनुहोस् र एडमिनबाट प्राप्त कोड प्रयोग गर्नुहोस्।

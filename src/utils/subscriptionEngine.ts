@@ -227,5 +227,5 @@ export function redeemCode(inputCode: string): { success: boolean; message: stri
   };
 
   localStorage.setItem(STORAGE_KEY_SUB, JSON.stringify(subData));
-  return { success: true, message: 'बधाई छ! तपाईंको परम्परागत नेपाली पत्रिका सदस्यता सफलतापूर्वक सक्रिय भयो।' };
+  return { success: true, message: 'बधाई छ! तपाईंको चिना सदस्यता सफलतापूर्वक सक्रिय भयो।' };
 }

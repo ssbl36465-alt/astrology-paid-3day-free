@@ -264,7 +264,7 @@ export const LiveConsultationModal: React.FC<LiveConsultationModalProps> = ({
               </h3>
               <p className="text-[11px] text-emerald-400 font-mono flex items-center gap-1">
                 <Lock className="w-3 h-3 text-emerald-400" />
-                <span>{isNe ? '१००% एपभित्रै सुरक्षित कुराकानी (नम्बर/WhatsApp बाहिर जाँदैन)' : '100% In-App Secure (No Phone/WhatsApp Shared)'}</span>
+                <span>{isNe ? 'सुरक्षित प्रत्यक्ष कुराकानी' : 'Secure Live Consultation'}</span>
               </p>
             </div>
           </div>

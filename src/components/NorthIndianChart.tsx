@@ -51,18 +51,25 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
     number,
     { signPos: { x: number; y: number }; planetsPos: { x: number; y: number } }
   > = {
-    1: { signPos: { x: 200, y: 160 }, planetsPos: { x: 200, y: 88 } }, // Top-center diamond (House 1)
-    2: { signPos: { x: 100, y: 72 },  planetsPos: { x: 100, y: 28 } }, // Top-left triangle (House 2)
-    3: { signPos: { x: 72,  y: 100 }, planetsPos: { x: 28,  y: 100 } }, // Top-far-left triangle (House 3)
-    4: { signPos: { x: 162, y: 200 }, planetsPos: { x: 82,  y: 200 } }, // Middle-left diamond (House 4)
-    5: { signPos: { x: 72,  y: 300 }, planetsPos: { x: 28,  y: 300 } }, // Bottom-far-left triangle (House 5)
-    6: { signPos: { x: 100, y: 328 }, planetsPos: { x: 100, y: 372 } }, // Bottom-left triangle (House 6)
-    7: { signPos: { x: 200, y: 238 }, planetsPos: { x: 200, y: 318 } }, // Bottom-center diamond (House 7)
-    8: { signPos: { x: 300, y: 328 }, planetsPos: { x: 300, y: 372 } }, // Bottom-right triangle (House 8)
-    9: { signPos: { x: 328, y: 300 }, planetsPos: { x: 372, y: 300 } }, // Bottom-far-right triangle (House 9)
-    10: { signPos: { x: 238, y: 200 }, planetsPos: { x: 318, y: 200 } }, // Middle-right diamond (House 10)
-    11: { signPos: { x: 328, y: 100 }, planetsPos: { x: 372, y: 100 } }, // Top-far-right triangle (House 11)
-    12: { signPos: { x: 300, y: 72 },  planetsPos: { x: 300, y: 28 } }, // Top-right triangle (House 12)
+    1: { signPos: { x: 200, y: 160 }, planetsPos: { x: 200, y: 92 } }, // Top-center diamond (House 1)
+    2: { signPos: { x: 100, y: 76 },  planetsPos: { x: 100, y: 36 } }, // Top-left triangle (House 2)
+    3: { signPos: { x: 76,  y: 100 }, planetsPos: { x: 44,  y: 100 } }, // Top-far-left triangle (House 3)
+    4: { signPos: { x: 162, y: 200 }, planetsPos: { x: 88,  y: 200 } }, // Middle-left diamond (House 4)
+    5: { signPos: { x: 76,  y: 300 }, planetsPos: { x: 44,  y: 300 } }, // Bottom-far-left triangle (House 5) - Safe margin prevents clipping 'शनि'
+    6: { signPos: { x: 100, y: 324 }, planetsPos: { x: 100, y: 364 } }, // Bottom-left triangle (House 6)
+    7: { signPos: { x: 200, y: 240 }, planetsPos: { x: 200, y: 315 } }, // Bottom-center diamond (House 7)
+    8: { signPos: { x: 300, y: 324 }, planetsPos: { x: 300, y: 364 } }, // Bottom-right triangle (House 8)
+    9: { signPos: { x: 324, y: 300 }, planetsPos: { x: 356, y: 300 } }, // Bottom-far-right triangle (House 9)
+    10: { signPos: { x: 238, y: 200 }, planetsPos: { x: 312, y: 200 } }, // Middle-right diamond (House 10)
+    11: { signPos: { x: 324, y: 100 }, planetsPos: { x: 356, y: 100 } }, // Top-far-right triangle (House 11)
+    12: { signPos: { x: 300, y: 76 },  planetsPos: { x: 300, y: 36 } }, // Top-right triangle (House 12)
+  };
+
+  const getGrahaLabel = (name: string, nepali: boolean) => {
+    if (name === 'Saturn' || name === 'शनि') return nepali ? 'शनि' : 'Sa';
+    const grahaInfo = GRAHA_MAP[name as GrahaName];
+    if (grahaInfo) return nepali ? grahaInfo.ne : name.substring(0, 2);
+    return name;
   };
 
   const getGrahaColor = (name: GrahaName, dark: boolean) => {
@@ -91,8 +98,7 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
 
     if (pList.length === 1) {
       const p = pList[0];
-      const grahaInfo = GRAHA_MAP[p.name];
-      const label = isNe ? grahaInfo.ne : p.name.substring(0, 2);
+      const label = getGrahaLabel(p.name, isNe);
       const retroTag = p.isRetro ? (isNe ? '(व)' : '(R)') : '';
       const color = getGrahaColor(p.name, isDark);
 
@@ -101,7 +107,7 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
           x={center.x}
           y={center.y}
           fill={color}
-          fontSize="15"
+          fontSize="14"
           fontWeight="900"
           textAnchor="middle"
           dominantBaseline="central"
@@ -120,8 +126,7 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
       return (
         <>
           {pList.map((p, idx) => {
-            const grahaInfo = GRAHA_MAP[p.name];
-            const label = isNe ? grahaInfo.ne : p.name.substring(0, 2);
+            const label = getGrahaLabel(p.name, isNe);
             const retroTag = p.isRetro ? (isNe ? '(व)' : '(R)') : '';
             const color = getGrahaColor(p.name, isDark);
             const yPos = center.y + (idx === 0 ? -10 : 10);
@@ -132,7 +137,7 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
                 x={center.x}
                 y={yPos}
                 fill={color}
-                fontSize="14"
+                fontSize="13.5"
                 fontWeight="800"
                 textAnchor="middle"
                 dominantBaseline="central"
@@ -154,11 +159,10 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
       return (
         <>
           {pList.map((p, idx) => {
-            const grahaInfo = GRAHA_MAP[p.name];
-            const label = isNe ? grahaInfo.ne : p.name.substring(0, 2);
+            const label = getGrahaLabel(p.name, isNe);
             const retroTag = p.isRetro ? (isNe ? '(व)' : '(R)') : '';
             const color = getGrahaColor(p.name, isDark);
-            const yPos = center.y + (idx - 1) * 16;
+            const yPos = center.y + (idx - 1) * 15;
 
             return (
               <text
@@ -166,7 +170,7 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
                 x={center.x}
                 y={yPos}
                 fill={color}
-                fontSize="13"
+                fontSize="12.5"
                 fontWeight="800"
                 textAnchor="middle"
                 dominantBaseline="central"
@@ -188,8 +192,7 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
     return (
       <>
         {pList.map((p, idx) => {
-          const grahaInfo = GRAHA_MAP[p.name];
-          const label = isNe ? grahaInfo.ne : p.name.substring(0, 2);
+          const label = getGrahaLabel(p.name, isNe);
           const retroTag = p.isRetro ? (isNe ? '(व)' : '(R)') : '';
           const color = getGrahaColor(p.name, isDark);
 
@@ -197,8 +200,8 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
           const row = Math.floor(idx / 2);
           const totalRows = Math.ceil(pList.length / 2);
 
-          const xPos = center.x + (col === 0 ? -24 : 24);
-          const yPos = center.y + (row - (totalRows - 1) / 2) * 15;
+          const xPos = center.x + (col === 0 ? -20 : 20);
+          const yPos = center.y + (row - (totalRows - 1) / 2) * 14;
 
           return (
             <text
@@ -282,7 +285,7 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
       <div className={`relative w-full aspect-square mx-auto transition-all duration-300 ${
         isLarge ? 'max-w-[540px] sm:max-w-[580px]' : 'max-w-[420px]'
       }`}>
-        <svg viewBox="0 0 400 400" className="w-full h-full select-none drop-shadow-md">
+        <svg viewBox="0 0 400 400" className="w-full h-full select-none drop-shadow-md overflow-visible">
           {/* Outer Border Background */}
           <rect
             width="400"

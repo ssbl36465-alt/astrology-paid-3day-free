@@ -21,6 +21,18 @@ import {
   onAuthStateChanged,
   type User as FirebaseUser
 } from 'firebase/auth';
+import {
+  getDatabase,
+  ref,
+  push,
+  set,
+  update,
+  remove,
+  onValue,
+  get,
+  child,
+  type Database
+} from 'firebase/database';
 import config from '../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -30,9 +42,25 @@ const firebaseConfig = {
   storageBucket: config.storageBucket,
   messagingSenderId: config.messagingSenderId,
   appId: config.appId,
+  databaseURL: config.projectId ? `https://${config.projectId}-default-rtdb.firebaseio.com` : undefined,
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// Firebase Realtime Database setup
+const defaultRtdbUrl = config.projectId ? `https://${config.projectId}-default-rtdb.firebaseio.com` : '';
+let rtdbInstance: Database | null = null;
+try {
+  rtdbInstance = defaultRtdbUrl ? getDatabase(app, defaultRtdbUrl) : getDatabase(app);
+} catch (e) {
+  try {
+    rtdbInstance = getDatabase(app);
+  } catch (err2) {
+    console.warn('Realtime Database initialization note:', err2);
+  }
+}
+export const rtdb = rtdbInstance;
+export { ref, push, set, update, remove, onValue, get, child };
 
 // Firebase Auth setup with forced account picker
 export const auth = getAuth(app);
@@ -255,115 +283,304 @@ export async function authenticateGoogleWithPopup(): Promise<VerifiedUserProfile
   throw new Error('Google Authentication failed. Please select a valid Google Account.');
 }
 
-// Helper functions for Gurus
-export async function syncGurusFromFirestore(): Promise<any[]> {
-  const map = new Map<string, any>();
-  try {
-    const snap = await getDocs(collection(db, GURUS_COLLECTION));
-    snap.forEach((d) => map.set(d.id, { ...d.data(), id: d.id }));
-  } catch (err) {
-    console.warn('Failed to fetch gurus from Firestore, trying API fallback:', err);
-  }
+// -------------------------------------------------------------
+// FIREBASE REALTIME DATABASE & FIRESTORE GURU LOGIC (ZERO LOCALSTORAGE)
+// -------------------------------------------------------------
 
-  // Also query API store to ensure no device is left behind
-  try {
-    const res = await fetch('/api/gurus');
-    if (res.ok) {
-      const serverGurus = await res.json();
-      if (Array.isArray(serverGurus)) {
-        serverGurus.forEach((g: any) => {
-          if (!map.has(g.id)) map.set(g.id, g);
-        });
-      }
+// 1. When a Guru registers, immediately write to Firebase Realtime Database path /guru_applications using push()
+export async function registerGuruApplication(applicationData: any): Promise<string> {
+  const timestamp = new Date().toISOString();
+  let appId = '';
+
+  // Write to Firebase Realtime Database path /guru_applications using push()
+  if (rtdb) {
+    try {
+      const appsRef = ref(rtdb, 'guru_applications');
+      const newRef = push(appsRef);
+      appId = newRef.key || `app-${Date.now()}`;
+      const record = {
+        ...applicationData,
+        id: appId,
+        createdAt: timestamp,
+        status: 'pending',
+      };
+      await set(newRef, record);
+    } catch (rtdbErr) {
+      console.warn('RTDB push warning:', rtdbErr);
     }
-  } catch (e) {}
-
-  return Array.from(map.values());
-}
-
-export async function saveGuruToFirestore(guru: any): Promise<void> {
-  if (!guru.id) return;
-  try {
-    await setDoc(doc(db, GURUS_COLLECTION, guru.id), guru, { merge: true });
-  } catch (err) {
-    console.warn('Firestore guru write warning:', err);
   }
 
-  // Mirror to server API
-  try {
-    const current = await syncGurusFromFirestore();
-    const updated = [guru, ...current.filter((g) => g.id !== guru.id)];
-    await fetch('/api/gurus', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
-  } catch (e) {}
-}
-
-// Helper functions for Guru Applications
-export async function syncApplicationsFromFirestore(): Promise<any[]> {
-  const map = new Map<string, any>();
-
-  // 1. Fetch live from Firestore collection /guru_applications
-  try {
-    const snap = await getDocs(collection(db, GURU_APPLICATIONS_COLLECTION));
-    snap.forEach((d) => map.set(d.id, { ...d.data(), id: d.id }));
-  } catch (err) {
-    console.warn('Failed to fetch applications from Firestore:', err);
+  if (!appId) {
+    appId = `app-${Date.now()}`;
   }
 
-  // 2. Also check backend API store to guarantee cross-device sync
+  const finalRecord = {
+    ...applicationData,
+    id: appId,
+    createdAt: timestamp,
+    status: 'pending',
+  };
+
+  // Dual-sync with Firestore & server API to ensure cross-device persistence with zero localStorage
   try {
-    const res = await fetch('/api/guru_applications');
-    if (res.ok) {
-      const serverApps = await res.json();
-      if (Array.isArray(serverApps)) {
-        serverApps.forEach((a: any) => {
-          if (!map.has(a.id)) {
-            map.set(a.id, a);
-            // Sync forward into Firestore so it stays in both
-            setDoc(doc(db, GURU_APPLICATIONS_COLLECTION, a.id), a, { merge: true }).catch(() => {});
-          }
-        });
-      }
-    }
-  } catch (e) {}
-
-  return Array.from(map.values());
-}
-
-export async function saveApplicationToFirestore(appData: any): Promise<void> {
-  if (!appData.id) return;
-
-  // 1. Write directly to Firestore /guru_applications
-  try {
-    await setDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appData.id), appData, { merge: true });
-  } catch (err) {
-    console.warn('Failed to save application to Firestore:', err);
+    await setDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appId), finalRecord, { merge: true });
+  } catch (fsErr) {
+    console.warn('Firestore app write warning:', fsErr);
   }
 
-  // 2. Also save to server backend API immediately
   try {
     await fetch('/api/guru_applications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(appData),
+      body: JSON.stringify(finalRecord),
     });
-  } catch (e) {}
-}
-
-export async function deleteApplicationFromFirestore(appId: string): Promise<void> {
-  try {
-    await deleteDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appId));
-  } catch (err) {
-    console.warn('Failed to delete application from Firestore:', err);
+  } catch (apiErr) {
+    console.warn('API app write warning:', apiErr);
   }
 
+  return appId;
+}
+
+// 2. Admin Panel MUST read /guru_applications directly using Firebase onValue() live listener
+export function listenToGuruApplications(callback: (apps: any[]) => void): () => void {
+  const unsubs: (() => void)[] = [];
+  const appsMap = new Map<string, any>();
+
+  const notify = () => {
+    const list = Array.from(appsMap.values()).sort((a, b) => {
+      const tA = new Date(a.createdAt || 0).getTime();
+      const tB = new Date(b.createdAt || 0).getTime();
+      return tB - tA;
+    });
+    callback(list);
+  };
+
+  // Firebase Realtime Database onValue() live listener on /guru_applications
+  if (rtdb) {
+    try {
+      const appsRef = ref(rtdb, 'guru_applications');
+      const rtdbUnsub = onValue(appsRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const val = snapshot.val();
+          if (val && typeof val === 'object') {
+            Object.keys(val).forEach((key) => {
+              const item = val[key];
+              const id = item.id || key;
+              appsMap.set(id, { ...item, id });
+            });
+            notify();
+          }
+        }
+      }, (err) => {
+        console.warn('RTDB onValue guru_applications warning:', err);
+      });
+      unsubs.push(() => rtdbUnsub());
+    } catch (e) {
+      console.warn('RTDB onValue attach note:', e);
+    }
+  }
+
+  // Dual-sync live listener on Firestore /guru_applications
+  try {
+    const fsUnsub = onSnapshot(collection(db, GURU_APPLICATIONS_COLLECTION), (snap) => {
+      snap.forEach((d) => {
+        const data = d.data();
+        appsMap.set(d.id, { ...data, id: d.id });
+      });
+      notify();
+    }, (err) => {
+      console.warn('Firestore onSnapshot guru_applications warning:', err);
+    });
+    unsubs.push(fsUnsub);
+  } catch (e) {}
+
+  // Initial fetch from backend API
+  fetch('/api/guru_applications')
+    .then((res) => res.json())
+    .then((serverApps) => {
+      if (Array.isArray(serverApps)) {
+        serverApps.forEach((app) => appsMap.set(app.id, app));
+        notify();
+      }
+    })
+    .catch(() => {});
+
+  return () => {
+    unsubs.forEach((u) => {
+      try { u(); } catch (e) {}
+    });
+  };
+}
+
+// 3. When Admin approves, update status in Firebase /guru_applications and write profile to /gurus
+export async function approveGuruApplication(appId: string, guruProfile: any): Promise<void> {
+  const guruId = guruProfile.id || appId.replace('app-', 'guru-');
+  const updatedGuru = {
+    ...guruProfile,
+    id: guruId,
+    status: 'approved',
+    adminStatus: guruProfile.adminStatus || 'active',
+    updatedAt: new Date().toISOString(),
+  };
+
+  // Update in Realtime Database /guru_applications and write to /gurus
+  if (rtdb) {
+    try {
+      await update(ref(rtdb, `guru_applications/${appId}`), { status: 'approved' });
+      await set(ref(rtdb, `gurus/${guruId}`), updatedGuru);
+    } catch (rtdbErr) {
+      console.warn('RTDB approve update warning:', rtdbErr);
+    }
+  }
+
+  // Dual-sync in Firestore
+  try {
+    await setDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appId), { status: 'approved' }, { merge: true });
+    await setDoc(doc(db, GURUS_COLLECTION, guruId), updatedGuru, { merge: true });
+    await setUserRole(guruId, 'guru', { guruId, name: guruProfile.name, status: 'approved' });
+  } catch (fsErr) {
+    console.warn('Firestore approve sync warning:', fsErr);
+  }
+
+  // Dual-sync in backend API
+  try {
+    await fetch('/api/guru_applications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: appId, status: 'approved' }),
+    });
+    await fetch('/api/gurus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([updatedGuru]),
+    });
+  } catch (apiErr) {
+    console.warn('API approve sync warning:', apiErr);
+  }
+}
+
+// 4. Client Guru List MUST read directly from Firebase /gurus
+export function listenToGurus(callback: (gurus: any[]) => void): () => void {
+  const unsubs: (() => void)[] = [];
+  const gurusMap = new Map<string, any>();
+
+  const notify = () => {
+    callback(Array.from(gurusMap.values()));
+  };
+
+  // Live listener on Firebase Realtime Database path /gurus using onValue()
+  if (rtdb) {
+    try {
+      const gurusRef = ref(rtdb, 'gurus');
+      const rtdbUnsub = onValue(gurusRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const val = snapshot.val();
+          if (val && typeof val === 'object') {
+            Object.keys(val).forEach((key) => {
+              const item = val[key];
+              const id = item.id || key;
+              gurusMap.set(id, { ...item, id });
+            });
+            notify();
+          }
+        }
+      }, (err) => {
+        console.warn('RTDB onValue gurus warning:', err);
+      });
+      unsubs.push(() => rtdbUnsub());
+    } catch (e) {
+      console.warn('RTDB onValue gurus attach note:', e);
+    }
+  }
+
+  // Live listener on Firestore /gurus
+  try {
+    const fsUnsub = onSnapshot(collection(db, GURUS_COLLECTION), (snap) => {
+      snap.forEach((d) => {
+        const data = d.data();
+        gurusMap.set(d.id, { ...data, id: d.id });
+      });
+      notify();
+    }, (err) => {
+      console.warn('Firestore onSnapshot gurus warning:', err);
+    });
+    unsubs.push(fsUnsub);
+  } catch (e) {}
+
+  // Fetch initial gurus from backend API
+  fetch('/api/gurus')
+    .then((res) => res.json())
+    .then((serverGurus) => {
+      if (Array.isArray(serverGurus)) {
+        serverGurus.forEach((g) => gurusMap.set(g.id, g));
+        notify();
+      }
+    })
+    .catch(() => {});
+
+  return () => {
+    unsubs.forEach((u) => {
+      try { u(); } catch (e) {}
+    });
+  };
+}
+
+export async function deleteGuruApplicationFromFirebase(appId: string): Promise<void> {
+  if (rtdb) {
+    try {
+      await remove(ref(rtdb, `guru_applications/${appId}`));
+    } catch (e) {}
+  }
+  try {
+    await deleteDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appId));
+  } catch (e) {}
   try {
     await fetch(`/api/guru_applications/${appId}`, { method: 'DELETE' });
   } catch (e) {}
 }
+
+export async function saveGuruToFirebase(guru: any): Promise<void> {
+  if (!guru.id) return;
+  if (rtdb) {
+    try {
+      await set(ref(rtdb, `gurus/${guru.id}`), guru);
+    } catch (e) {}
+  }
+  try {
+    await setDoc(doc(db, GURUS_COLLECTION, guru.id), guru, { merge: true });
+  } catch (e) {}
+  try {
+    await fetch('/api/gurus', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([guru]),
+    });
+  } catch (e) {}
+}
+
+export async function deleteGuruFromFirebase(guruId: string): Promise<void> {
+  if (rtdb) {
+    try {
+      await remove(ref(rtdb, `gurus/${guruId}`));
+    } catch (e) {}
+  }
+  try {
+    await deleteDoc(doc(db, GURUS_COLLECTION, guruId));
+  } catch (e) {}
+}
+
+// Backward compatible aliases
+export const saveGuruToFirestore = saveGuruToFirebase;
+export const saveApplicationToFirestore = registerGuruApplication;
+export const deleteApplicationFromFirestore = deleteGuruApplicationFromFirebase;
+export const syncGurusFromFirestore = async () => {
+  const res = await fetch('/api/gurus');
+  return res.ok ? await res.json() : [];
+};
+export const syncApplicationsFromFirestore = async () => {
+  const res = await fetch('/api/guru_applications');
+  return res.ok ? await res.json() : [];
+};
 
 // Helper functions for Recharges & Bookings
 export async function saveRechargeToFirestore(recharge: any): Promise<void> {

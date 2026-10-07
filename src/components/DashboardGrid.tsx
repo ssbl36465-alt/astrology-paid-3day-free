@@ -72,10 +72,10 @@ export const DashboardGrid: React.FC<DashboardGridProps> = ({
     },
     {
       id: 'traditionalPatrika',
-      nameNe: 'चिनारु पत्रिका',
-      nameEn: 'Traditional Patrika',
-      descNe: 'विस्तृत चिनारु पत्रिका',
-      descEn: 'Detailed Patrika View',
+      nameNe: 'चिना',
+      nameEn: 'Kundali / China',
+      descNe: 'विस्तृत जन्म चिना',
+      descEn: 'Detailed Kundali / China View',
       icon: <Scroll className="w-6 h-6 text-purple-500" />,
       bg: 'bg-purple-500/10 border-purple-500/30',
       badge: 'Popular'

@@ -237,10 +237,12 @@ export const DashaView: React.FC<DashaViewProps> = ({ data, language }) => {
                 {/* Graha Lord */}
                 <div className="bg-slate-900/90 border border-amber-900/50 p-3.5 rounded-xl flex items-center gap-3">
                   <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-950 shadow-md shrink-0"
+                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-950 shadow-md shrink-0 text-xs"
                     style={{ backgroundColor: GRAHA_MAP[currentActiveTribhagi.planet]?.color || '#f59e0b' }}
                   >
-                    {currentActiveTribhagi.planet.slice(0, 2)}
+                    {isNe
+                      ? (GRAHA_MAP[currentActiveTribhagi.planet]?.ne || currentActiveTribhagi.planet)
+                      : currentActiveTribhagi.planet.slice(0, 2)}
                   </div>
                   <div>
                     <span className="text-[10px] text-amber-400 uppercase font-bold block">
@@ -455,10 +457,12 @@ export const DashaView: React.FC<DashaViewProps> = ({ data, language }) => {
                 {/* Yogini Name & Ruler */}
                 <div className="bg-slate-900/90 border border-purple-900/50 p-3.5 rounded-xl flex items-center gap-3">
                   <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-950 shadow-md shrink-0"
+                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-slate-950 shadow-md shrink-0 text-xs"
                     style={{ backgroundColor: GRAHA_MAP[currentActiveYogini.ruler]?.color || '#a855f7' }}
                   >
-                    {currentActiveYogini.ruler.slice(0, 2)}
+                    {isNe
+                      ? (GRAHA_MAP[currentActiveYogini.ruler]?.ne || currentActiveYogini.ruler)
+                      : currentActiveYogini.ruler.slice(0, 2)}
                   </div>
                   <div>
                     <span className="text-[10px] text-purple-400 uppercase font-bold block">

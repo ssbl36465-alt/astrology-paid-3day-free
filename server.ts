@@ -6,67 +6,10 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { GoogleGenAI } from '@google/genai';
+import { generateIntelligentAnswer } from './src/utils/aiKnowledgeEngine';
 
 function generateSmartFallback(message: string, context: any, language: string): string {
-  const isNe = language === 'ne';
-  const q = (message || '').trim().toLowerCase();
-
-  // 1. Casual greetings (Hello, Hi, Namaste, etc.) -> NO ASTROLOGY FORCED!
-  const greetings = ['hello', 'hi', 'hey', 'namaste', 'namaskar', 'नमस्ते', 'नमस्कार', 'ह्यालो', 'हेलो', 'गुड मर्निंग', 'good morning', 'good afternoon', 'good evening', 'hola'];
-  const isGreetingOnly = greetings.some(g => q === g || q.startsWith(g + ' ') || q.endsWith(' ' + g) || q.includes(g));
-  if (isGreetingOnly && q.length < 25) {
-    return isNe
-      ? 'नमस्कार! म तपाईंलाई आज कसरी सहयोग गर्न सक्छु? हजुरको कुनै पनि सामान्य जिज्ञासा, प्रश्न वा कुण्डली सम्बन्धी केही बुझ्न मन भए निर्धक्क सोध्नुहोस्।'
-      : 'Hello! How can I help you today? Please feel free to ask any question or astrological inquiry.';
-  }
-
-  // 2. Questions asking "who are you" / "what can you do"
-  if (q.includes('who are you') || q.includes('who r u') || q.includes('तपाईं को') || q.includes('तपाई को') || q.includes('timi ko')) {
-    return isNe
-      ? 'म वैदिक ज्योतिष पोर्टलको बौद्धिक AI सहायक हुँ। म तपाईंलाई सामान्य ज्ञान, दैनिक जीवनका प्रश्नहरू, अध्ययन, प्रविधिदेखि लिएर तपाईंको कुण्डली, ग्रह-दशा र ज्योतिषीय विश्लेषणसम्म सबै कुरामा ChatGPT र Gemini जस्तै सही र स्पष्ट उत्तर दिन सक्छु। मलाई जे पनि सोध्न सक्नुहुन्छ!'
-      : 'I am the intelligent AI Assistant for the Vedic Jyotish portal. Just like ChatGPT and Gemini, I can answer all types of questions—from general knowledge, science, and everyday life to personalized Vedic astrological analysis based on your birth chart.';
-  }
-
-  // 3. How are you / कस्तो छ
-  if (q.includes('how are you') || q.includes('how r u') || q.includes('kasto cha') || q.includes('कस्तो छ') || q.includes('के छ') || q.includes('ke cha')) {
-    return isNe
-      ? 'म एकदम ठीक छु, धन्यवाद! हजुरलाई कस्तो छ? आज हजुरलाई के सहयोग गर्न सक्छु?'
-      : 'I am doing great, thank you! How are you doing today? How may I assist you?';
-  }
-
-  // 4. Thank you
-  if (q.includes('thank') || q.includes('dhanyabad') || q.includes('धन्यवाद')) {
-    return isNe
-      ? 'हजुरलाई धेरै धेरै स्वागत छ! अरु केही जान्न वा सोध्न मन भए निसङ्कोच सोध्नुहोला।'
-      : 'You are very welcome! Feel free to ask if you have any other questions.';
-  }
-
-  // 5. Specific astrology questions:
-  const lagna = isNe ? (context?.lagnaNe || 'मेष') : (context?.lagnaEn || 'Aries');
-  const moon = isNe ? (context?.moonSignNe || 'वृष') : (context?.moonSignEn || 'Taurus');
-
-  if (q.includes('career') || q.includes('job') || q.includes('business') || q.includes('करियर') || q.includes('जागिर') || q.includes('व्यापार') || q.includes('काम')) {
-    return isNe
-      ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: तपाईंको लग्न '${lagna}' र चन्द्रमा '${moon}' राशी अनुसार दशम भाव (कर्म भाव) को प्रभावले तपाईंलाई व्यवस्थापन, नेतृत्व, परामर्श वा स्वतन्त्र उद्यममा राम्रो सफलताको संकेत गर्दछ। निरन्तरको प्रयास र योजनाबद्ध कार्यले उच्च उन्नति गराउनेछ।`
-      : `According to your '${lagna}' ascendant and '${moon}' Moon sign, your 10th house indicates strong potential in management, leadership, professional consultancy, or independent business ventures.`;
-  }
-
-  if (q.includes('marriage') || q.includes('love') || q.includes('spouse') || q.includes('विवाह') || q.includes('बिहे') || q.includes('प्रेम')) {
-    return isNe
-      ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: सप्तम भाव र शुक्रको स्थिति अनुसार वैवाहिक तथा पारिवारिक जीवनमा आपसी समझदारी, धैर्य र खुला कुराकानीले सम्बन्ध सुमधुर र सुखमय बनाउँछ।`
-      : `According to the 7th house and Venus placement, mutual respect, open communication, and patience will ensure a harmonious relationship.`;
-  }
-
-  if (q.includes('wealth') || q.includes('money') || q.includes('धन') || q.includes('पैसा') || q.includes('आर्थिक')) {
-    return isNe
-      ? `पण्डित शम्भु प्रसाद लम्सालको विश्लेषण: द्वितीय (धन) र एकादश (लाभ) भावको शुभ दृष्टिले वित्तीय स्थिति स्थिर रहने र उचित लगानी तथा सुनियोजित बचतबाट धनवृद्धि हुने योग छ।`
-      : `Financial stability is favored through disciplined savings and calculated investments according to your 2nd and 11th houses.`;
-  }
-
-  // 6. General question fallback (answering directly without forcing astrology)
-  return isNe
-    ? `तपाईंको जिज्ञासा "${message}" को सम्बन्धमा: म हजुरलाई हरेक विषयमा सल्लाह र सही जानकारी दिन सक्छु। कृपया आफ्नो प्रश्न अझ खुलाएर सोध्नुहोला!`
-    : `Regarding your inquiry "${message}": I am here to help answer all your questions accurately. Please feel free to elaborate!`;
+  return generateIntelligentAnswer(message, context, language);
 }
 
 async function startServer() {
@@ -170,6 +113,16 @@ async function startServer() {
       return res.status(400).json({ error: 'Message string is required' });
     }
 
+    // Fast path for instant greetings & math (ensures zero latency and 100% adherence to prompt)
+    const trimmed = (message || '').trim().toLowerCase();
+    const isPureGreeting = ['hello', 'hi', 'hey', 'नमस्ते', 'नमस्कार', 'हेलो', 'ह्यालो', 'good morning', 'kasto cha', 'कस्तो छ'].some(
+      (g) => trimmed === g || trimmed === g + '!' || trimmed === g + ' sir'
+    );
+    if (isPureGreeting || /^[0-9०-९\s\+\-\*\/÷xX×=]+$/.test(trimmed)) {
+      const immediateAns = generateSmartFallback(message, kundaliContext, language);
+      return res.json({ reply: immediateAns });
+    }
+
     try {
       const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENAI_API_KEY || process.env.API_KEY || '';
       if (!apiKey) {
@@ -237,10 +190,14 @@ CRITICAL INSTRUCTIONS ON UNDERSTANDING AND ANSWERING QUESTIONS (जस्तो 
    - If the user writes in English, reply in clear, professional, warm English.
    - Keep answers clear, well-formatted, and concise (not unnecessarily long).
 
+6. NO PREAMBLE / DIRECT ANSWER ONLY (भूमिका नबाँध्नुहोस्):
+   - कहिल्यै पनि लामो भूमिका, पृष्ठभूमि वा अनावश्यक व्याख्या नबाँध्नुहोस्।
+   - सिधै मुख्य विषयवस्तु र प्रश्नको ठोस उत्तर मात्र दिनुहोस्। Do not build introductory fluff or preamble.
+
 ${contextSummary}
 `;
 
-      const response = await ai.models.generateContent({
+      const generatePromise = ai.models.generateContent({
         model: 'gemini-3.8-flash',
         contents,
         config: {
@@ -249,6 +206,11 @@ ${contextSummary}
         },
       });
 
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('AI response timeout')), 3500)
+      );
+
+      const response = await Promise.race([generatePromise, timeoutPromise]);
       const reply = response.text || generateSmartFallback(message, kundaliContext, language);
       return res.json({ reply });
     } catch (err: any) {

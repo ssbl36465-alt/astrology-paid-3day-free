@@ -7,13 +7,17 @@ import {
   GURUS_COLLECTION,
   CLIENT_RECHARGES_COLLECTION,
   CLIENT_BOOKINGS_COLLECTION,
-  saveGuruToFirestore, 
-  saveApplicationToFirestore, 
-  deleteApplicationFromFirestore,
+  listenToGuruApplications,
+  approveGuruApplication,
+  listenToGurus,
+  saveGuruToFirebase,
+  deleteGuruFromFirebase,
+  deleteGuruApplicationFromFirebase,
+  registerGuruApplication,
   saveRechargeToFirestore,
   setUserRole,
   syncGurusFromFirestore,
-  syncApplicationsFromFirestore 
+  syncApplicationsFromFirestore
 } from '../firebase';
 import { collection, onSnapshot, doc, deleteDoc } from 'firebase/firestore';
 
@@ -87,29 +91,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
   useEffect(() => {
     if (!isAuthenticated || !isOpen) return;
 
-    loadAdminData();
+    // 2. Admin Panel MUST read /guru_applications directly using Firebase onValue() live listener. Zero localStorage!
+    const unsubApps = listenToGuruApplications((list) => {
+      setGuruApplications(list as GuruApplication[]);
+    });
 
-    // Real-time live listener for Guru Applications directly from Firebase (/guru_applications)
-    const unsubApps = onSnapshot(collection(db, GURU_APPLICATIONS_COLLECTION), (snap) => {
-      const list: GuruApplication[] = [];
-      snap.forEach((d) => list.push({ ...(d.data() as GuruApplication), id: d.id }));
-      setGuruApplications(list);
-    }, (err) => console.warn('Realtime guru_applications sync warning:', err));
-
-    // Real-time live listener for Gurus directly from Firebase (/gurus)
-    const unsubGurus = onSnapshot(collection(db, GURUS_COLLECTION), (snap) => {
-      const list: GuruReport[] = [];
-      snap.forEach((d) => {
-        const data = d.data() as any;
-        list.push({
-          ...data,
-          id: d.id,
-          adminStatus: data.adminStatus || 'active',
-          bannedUntil: data.bannedUntil || null,
-        });
-      });
-      setGurusReport(list);
-    }, (err) => console.warn('Realtime gurus sync warning:', err));
+    // 4. Admin/Client Gurus list MUST read directly from Firebase /gurus. Zero localStorage!
+    const unsubGurus = listenToGurus((list) => {
+      setGurusReport(list.map((g) => ({
+        ...g,
+        adminStatus: g.adminStatus || 'active',
+        bannedUntil: g.bannedUntil || null,
+      })));
+    });
 
     // Real-time live listener for Recharges directly from Firebase
     const unsubRecharges = onSnapshot(collection(db, CLIENT_RECHARGES_COLLECTION), (snap) => {
@@ -140,20 +134,8 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
   }, [isAuthenticated, isOpen]);
 
   const loadAdminData = () => {
-    // Local data load
-    const savedGurus = localStorage.getItem('vaidik_jyotish_gurus');
-    if (savedGurus) {
-      try {
-        const parsed = JSON.parse(savedGurus);
-        setGurusReport(parsed.map((g: any) => ({
-          ...g,
-          adminStatus: g.adminStatus || 'active',
-          bannedUntil: g.bannedUntil || null,
-        })));
-      } catch (e) { setGurusReport([]); }
-    } else {
-      setGurusReport([]);
-    }
+    // ZERO localStorage for gurus or guru applications:
+    // Gurus & applications are strictly read directly from Firebase /gurus and /guru_applications!
 
     const savedBookings = localStorage.getItem('vaidik_client_bookings');
     if (savedBookings) {
@@ -217,12 +199,6 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
 
     const guruId = appToApprove.id.replace('app-', 'guru-');
 
-    // 1. Update application status to approved in Firebase /guru_applications
-    const approvedApp = { ...appToApprove, status: 'approved' as const };
-    await saveApplicationToFirestore(approvedApp);
-    setGuruApplications((prev) => prev.map((a) => a.id === appId ? approvedApp : a));
-
-    // 2. Update their status to approved in Firebase under /gurus
     const newGuruProfile = {
       id: guruId,
       name: appToApprove.name,
@@ -245,18 +221,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       totalEarningsRs: 0,
       phone: appToApprove.phone,
     };
-    await saveGuruToFirestore(newGuruProfile);
+
+    // 3. When Admin approves, update status in Firebase /guru_applications and write profile to /gurus
+    await approveGuruApplication(appId, newGuruProfile);
+    setGuruApplications((prev) => prev.map((a) => a.id === appId ? { ...a, status: 'approved' } : a));
     setGurusReport((prev) => [newGuruProfile, ...prev.filter((g) => g.id !== guruId)]);
 
-    // 3. Update /users/{uid}/role as guru in Firebase
-    await setUserRole(guruId, 'guru', {
-      guruId,
-      name: appToApprove.name,
-      phone: appToApprove.phone,
-      status: 'approved',
-    });
-
-    alert(`गुरु ${appToApprove.name} को आवेदन स्वीकृत गरियो र Firebase मा 'guru' रोल सहित प्रोफाइल सक्रिय भयो!`);
+    alert(`गुरु ${appToApprove.name} को आवेदन स्वीकृत गरियो र Firebase Realtime Database मा 'guru' रोल सहित प्रोफाइल सक्रिय भयो!`);
   };
 
   const handleRejectGuruApp = async (appId: string) => {
@@ -265,7 +236,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
     const appToReject = guruApplications.find(a => a.id === appId);
     if (appToReject) {
       const rejectedApp = { ...appToReject, status: 'rejected' as const };
-      await saveApplicationToFirestore(rejectedApp);
+      await registerGuruApplication(rejectedApp);
       setGuruApplications((prev) => prev.map((a) => a.id === appId ? rejectedApp : a));
     }
     alert('गुरु आवेदन अस्वीकार गरियो।');
@@ -273,7 +244,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
 
   const handleDeleteGuruApp = async (appId: string) => {
     if (window.confirm('के तपाईं यो आवेदन स्थायी रूपमा हटाउन (Delete) चाहनुहुन्छ?')) {
-      await deleteApplicationFromFirestore(appId);
+      await deleteGuruApplicationFromFirebase(appId);
       setGuruApplications((prev) => prev.filter((a) => a.id !== appId));
     }
   };
@@ -303,7 +274,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       setGurusReport(updated);
       const targetGuru = updated.find(g => g.id === guruId);
       if (targetGuru) {
-        await saveGuruToFirestore(targetGuru);
+        await saveGuruToFirebase(targetGuru);
       }
       alert(type === '24h' ? 'गुरु २४ घण्टाका लागि प्रतिबन्धित गरियो।' : 'गुरु स्थायी रूपमा प्रतिबन्धित गरियो।');
     }
@@ -326,7 +297,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       setGurusReport(updated);
       const targetGuru = updated.find(g => g.id === guruId);
       if (targetGuru) {
-        await saveGuruToFirestore(targetGuru);
+        await saveGuruToFirebase(targetGuru);
       }
       alert('गुरुको प्रतिबन्ध फुकुवा गरियो र पुनः सक्रिय (Re-Accepted) बनाइयो!');
     }
@@ -393,7 +364,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
       setGurusReport(updated);
       const targetGuru = updated.find(g => g.id === guruId);
       if (targetGuru) {
-        await saveGuruToFirestore(targetGuru);
+        await saveGuruToFirebase(targetGuru);
       }
       alert('गुरुको आम्दानी सफलतापूर्वक शून्य (0) बनाइयो।');
     }

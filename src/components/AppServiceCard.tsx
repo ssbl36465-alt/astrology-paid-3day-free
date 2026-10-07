@@ -47,7 +47,7 @@ export const AppServiceCard: React.FC<AppServiceCardProps> = ({ language }) => {
               <ul className="space-y-2.5 text-sm text-slate-300">
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <span>{isNe ? 'जन्मदेखि मृत्युसम्मको सम्पूर्ण जीवनकाल समेटिएको ३००+ पेजको विस्तृत फलित (जन्मपत्रिका, गोचर, दशा, महादशा, वर्षफल आदि)।' : 'Complete 300+ page comprehensive life predictions from birth to death.'}</span>
+                  <span>{isNe ? 'जन्मदेखि मृत्युसम्मको सम्पूर्ण जीवनकाल समेटिएको ३००+ पेजको विस्तृत फलित (चिना, गोचर, दशा, महादशा, वर्षफल आदि)।' : 'Complete 300+ page comprehensive life predictions from birth to death.'}</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <CheckCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
