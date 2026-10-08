@@ -91,7 +91,9 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({ isOpen, onClos
   useEffect(() => {
     if (!isAuthenticated || !isOpen) return;
 
-    // 2. Admin Panel MUST read /guru_applications directly using Firebase onValue() live listener. Zero localStorage!
+    loadAdminData();
+
+    // 2. Admin Panel MUST read /guru_applications directly using Firebase Cloud Firestore live listener. Zero localStorage!
     const unsubApps = listenToGuruApplications((list) => {
       setGuruApplications(list as GuruApplication[]);
     });

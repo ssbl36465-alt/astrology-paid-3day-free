@@ -53,15 +53,15 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
   > = {
     1: { signPos: { x: 200, y: 160 }, planetsPos: { x: 200, y: 92 } }, // Top-center diamond (House 1)
     2: { signPos: { x: 100, y: 76 },  planetsPos: { x: 100, y: 36 } }, // Top-left triangle (House 2)
-    3: { signPos: { x: 76,  y: 100 }, planetsPos: { x: 44,  y: 100 } }, // Top-far-left triangle (House 3)
+    3: { signPos: { x: 78,  y: 100 }, planetsPos: { x: 42,  y: 100 } }, // Top-far-left triangle (House 3)
     4: { signPos: { x: 162, y: 200 }, planetsPos: { x: 88,  y: 200 } }, // Middle-left diamond (House 4)
-    5: { signPos: { x: 76,  y: 300 }, planetsPos: { x: 44,  y: 300 } }, // Bottom-far-left triangle (House 5) - Safe margin prevents clipping 'शनि'
+    5: { signPos: { x: 78,  y: 300 }, planetsPos: { x: 42,  y: 300 } }, // Bottom-far-left triangle (House 5) - Safe margin prevents clipping 'शनि'
     6: { signPos: { x: 100, y: 324 }, planetsPos: { x: 100, y: 364 } }, // Bottom-left triangle (House 6)
     7: { signPos: { x: 200, y: 240 }, planetsPos: { x: 200, y: 315 } }, // Bottom-center diamond (House 7)
     8: { signPos: { x: 300, y: 324 }, planetsPos: { x: 300, y: 364 } }, // Bottom-right triangle (House 8)
-    9: { signPos: { x: 324, y: 300 }, planetsPos: { x: 356, y: 300 } }, // Bottom-far-right triangle (House 9)
+    9: { signPos: { x: 322, y: 300 }, planetsPos: { x: 358, y: 300 } }, // Bottom-far-right triangle (House 9)
     10: { signPos: { x: 238, y: 200 }, planetsPos: { x: 312, y: 200 } }, // Middle-right diamond (House 10)
-    11: { signPos: { x: 324, y: 100 }, planetsPos: { x: 356, y: 100 } }, // Top-far-right triangle (House 11)
+    11: { signPos: { x: 322, y: 100 }, planetsPos: { x: 358, y: 100 } }, // Top-far-right triangle (House 11)
     12: { signPos: { x: 300, y: 76 },  planetsPos: { x: 300, y: 36 } }, // Top-right triangle (House 12)
   };
 
@@ -285,7 +285,7 @@ export const NorthIndianChart: React.FC<NorthIndianChartProps> = ({
       <div className={`relative w-full aspect-square mx-auto transition-all duration-300 ${
         isLarge ? 'max-w-[540px] sm:max-w-[580px]' : 'max-w-[420px]'
       }`}>
-        <svg viewBox="0 0 400 400" className="w-full h-full select-none drop-shadow-md overflow-visible">
+        <svg viewBox="-8 -8 416 416" className="w-full h-full select-none drop-shadow-md overflow-visible">
           {/* Outer Border Background */}
           <rect
             width="400"

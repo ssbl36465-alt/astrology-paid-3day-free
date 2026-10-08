@@ -287,75 +287,88 @@ export async function authenticateGoogleWithPopup(): Promise<VerifiedUserProfile
 // FIREBASE REALTIME DATABASE & FIRESTORE GURU LOGIC (ZERO LOCALSTORAGE)
 // -------------------------------------------------------------
 
-// 1. When a Guru registers, immediately write to Firebase Realtime Database path /guru_applications using push()
+// 1. When a Guru registers, immediately write to Firebase Cloud Firestore /guru_applications
 export async function registerGuruApplication(applicationData: any): Promise<string> {
   const timestamp = new Date().toISOString();
-  let appId = '';
-
-  // Write to Firebase Realtime Database path /guru_applications using push()
-  if (rtdb) {
-    try {
-      const appsRef = ref(rtdb, 'guru_applications');
-      const newRef = push(appsRef);
-      appId = newRef.key || `app-${Date.now()}`;
-      const record = {
-        ...applicationData,
-        id: appId,
-        createdAt: timestamp,
-        status: 'pending',
-      };
-      await set(newRef, record);
-    } catch (rtdbErr) {
-      console.warn('RTDB push warning:', rtdbErr);
-    }
-  }
-
-  if (!appId) {
-    appId = `app-${Date.now()}`;
-  }
+  const appId = `app-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
   const finalRecord = {
     ...applicationData,
     id: appId,
     createdAt: timestamp,
+    createdAtIso: timestamp,
     status: 'pending',
   };
 
-  // Dual-sync with Firestore & server API to ensure cross-device persistence with zero localStorage
+  // 1. PRIMARY: Write directly to Google Cloud Firestore (guarantees cross-device sync across all phones/tablets/PCs)
   try {
     await setDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appId), finalRecord, { merge: true });
   } catch (fsErr) {
     console.warn('Firestore app write warning:', fsErr);
   }
 
+  // 2. SECONDARY: Broadcast to RTDB if available (non-blocking)
+  if (rtdb) {
+    try {
+      set(ref(rtdb, `guru_applications/${appId}`), finalRecord).catch(() => {});
+    } catch (rtdbErr) {}
+  }
+
+  // 3. SECONDARY: Sync to local server API (non-blocking)
   try {
-    await fetch('/api/guru_applications', {
+    fetch('/api/guru_applications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(finalRecord),
-    });
-  } catch (apiErr) {
-    console.warn('API app write warning:', apiErr);
-  }
+    }).catch(() => {});
+  } catch (apiErr) {}
 
   return appId;
 }
 
-// 2. Admin Panel MUST read /guru_applications directly using Firebase onValue() live listener
+// 2. Admin Panel MUST read /guru_applications directly using live Cloud Firestore listener
 export function listenToGuruApplications(callback: (apps: any[]) => void): () => void {
   const unsubs: (() => void)[] = [];
   const appsMap = new Map<string, any>();
 
   const notify = () => {
     const list = Array.from(appsMap.values()).sort((a, b) => {
-      const tA = new Date(a.createdAt || 0).getTime();
-      const tB = new Date(b.createdAt || 0).getTime();
+      const tA = new Date(a.createdAt || a.createdAtIso || 0).getTime();
+      const tB = new Date(b.createdAt || b.createdAtIso || 0).getTime();
       return tB - tA;
     });
     callback(list);
   };
 
-  // Firebase Realtime Database onValue() live listener on /guru_applications
+  // 1. PRIMARY: Real-time Cloud Firestore listener (delivers updates instantly to all devices)
+  try {
+    const fsUnsub = onSnapshot(collection(db, GURU_APPLICATIONS_COLLECTION), (snap) => {
+      snap.forEach((d) => {
+        const data = d.data();
+        appsMap.set(d.id, { ...data, id: d.id });
+      });
+      notify();
+    }, (err) => {
+      console.warn('Firestore onSnapshot guru_applications warning:', err);
+    });
+    unsubs.push(fsUnsub);
+  } catch (e) {
+    console.warn('Firestore attach error:', e);
+  }
+
+  // 2. Immediate direct fetch from Firestore
+  getDocs(collection(db, GURU_APPLICATIONS_COLLECTION))
+    .then((snap) => {
+      if (!snap.empty) {
+        snap.forEach((d) => {
+          appsMap.set(d.id, { ...d.data(), id: d.id });
+        });
+        notify();
+      }
+    })
+    .catch((err) => console.warn('Direct getDocs apps error:', err));
+
+  // 3. Optional RTDB listener if connected
   if (rtdb) {
     try {
       const appsRef = ref(rtdb, 'guru_applications');
@@ -371,39 +384,10 @@ export function listenToGuruApplications(callback: (apps: any[]) => void): () =>
             notify();
           }
         }
-      }, (err) => {
-        console.warn('RTDB onValue guru_applications warning:', err);
-      });
+      }, () => {});
       unsubs.push(() => rtdbUnsub());
-    } catch (e) {
-      console.warn('RTDB onValue attach note:', e);
-    }
+    } catch (e) {}
   }
-
-  // Dual-sync live listener on Firestore /guru_applications
-  try {
-    const fsUnsub = onSnapshot(collection(db, GURU_APPLICATIONS_COLLECTION), (snap) => {
-      snap.forEach((d) => {
-        const data = d.data();
-        appsMap.set(d.id, { ...data, id: d.id });
-      });
-      notify();
-    }, (err) => {
-      console.warn('Firestore onSnapshot guru_applications warning:', err);
-    });
-    unsubs.push(fsUnsub);
-  } catch (e) {}
-
-  // Initial fetch from backend API
-  fetch('/api/guru_applications')
-    .then((res) => res.json())
-    .then((serverApps) => {
-      if (Array.isArray(serverApps)) {
-        serverApps.forEach((app) => appsMap.set(app.id, app));
-        notify();
-      }
-    })
-    .catch(() => {});
 
   return () => {
     unsubs.forEach((u) => {
@@ -423,17 +407,7 @@ export async function approveGuruApplication(appId: string, guruProfile: any): P
     updatedAt: new Date().toISOString(),
   };
 
-  // Update in Realtime Database /guru_applications and write to /gurus
-  if (rtdb) {
-    try {
-      await update(ref(rtdb, `guru_applications/${appId}`), { status: 'approved' });
-      await set(ref(rtdb, `gurus/${guruId}`), updatedGuru);
-    } catch (rtdbErr) {
-      console.warn('RTDB approve update warning:', rtdbErr);
-    }
-  }
-
-  // Dual-sync in Firestore
+  // 1. PRIMARY: Write directly to Cloud Firestore
   try {
     await setDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appId), { status: 'approved' }, { merge: true });
     await setDoc(doc(db, GURUS_COLLECTION, guruId), updatedGuru, { merge: true });
@@ -442,24 +416,30 @@ export async function approveGuruApplication(appId: string, guruProfile: any): P
     console.warn('Firestore approve sync warning:', fsErr);
   }
 
-  // Dual-sync in backend API
+  // 2. SECONDARY: Update in RTDB
+  if (rtdb) {
+    try {
+      update(ref(rtdb, `guru_applications/${appId}`), { status: 'approved' }).catch(() => {});
+      set(ref(rtdb, `gurus/${guruId}`), updatedGuru).catch(() => {});
+    } catch (rtdbErr) {}
+  }
+
+  // 3. SECONDARY: Update in backend API
   try {
-    await fetch('/api/guru_applications', {
+    fetch('/api/guru_applications', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: appId, status: 'approved' }),
-    });
-    await fetch('/api/gurus', {
+    }).catch(() => {});
+    fetch('/api/gurus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify([updatedGuru]),
-    });
-  } catch (apiErr) {
-    console.warn('API approve sync warning:', apiErr);
-  }
+    }).catch(() => {});
+  } catch (apiErr) {}
 }
 
-// 4. Client Guru List MUST read directly from Firebase /gurus
+// 4. Client Guru List MUST read directly from Firebase Cloud Firestore /gurus
 export function listenToGurus(callback: (gurus: any[]) => void): () => void {
   const unsubs: (() => void)[] = [];
   const gurusMap = new Map<string, any>();
@@ -468,7 +448,35 @@ export function listenToGurus(callback: (gurus: any[]) => void): () => void {
     callback(Array.from(gurusMap.values()));
   };
 
-  // Live listener on Firebase Realtime Database path /gurus using onValue()
+  // 1. PRIMARY: Live listener on Cloud Firestore /gurus
+  try {
+    const fsUnsub = onSnapshot(collection(db, GURUS_COLLECTION), (snap) => {
+      snap.forEach((d) => {
+        const data = d.data();
+        gurusMap.set(d.id, { ...data, id: d.id });
+      });
+      notify();
+    }, (err) => {
+      console.warn('Firestore onSnapshot gurus warning:', err);
+    });
+    unsubs.push(fsUnsub);
+  } catch (e) {
+    console.warn('Firestore attach error:', e);
+  }
+
+  // 2. Immediate direct fetch from Firestore
+  getDocs(collection(db, GURUS_COLLECTION))
+    .then((snap) => {
+      if (!snap.empty) {
+        snap.forEach((d) => {
+          gurusMap.set(d.id, { ...d.data(), id: d.id });
+        });
+        notify();
+      }
+    })
+    .catch((err) => console.warn('Direct getDocs gurus error:', err));
+
+  // 3. Optional RTDB listener if connected
   if (rtdb) {
     try {
       const gurusRef = ref(rtdb, 'gurus');
@@ -484,39 +492,10 @@ export function listenToGurus(callback: (gurus: any[]) => void): () => void {
             notify();
           }
         }
-      }, (err) => {
-        console.warn('RTDB onValue gurus warning:', err);
-      });
+      }, () => {});
       unsubs.push(() => rtdbUnsub());
-    } catch (e) {
-      console.warn('RTDB onValue gurus attach note:', e);
-    }
+    } catch (e) {}
   }
-
-  // Live listener on Firestore /gurus
-  try {
-    const fsUnsub = onSnapshot(collection(db, GURUS_COLLECTION), (snap) => {
-      snap.forEach((d) => {
-        const data = d.data();
-        gurusMap.set(d.id, { ...data, id: d.id });
-      });
-      notify();
-    }, (err) => {
-      console.warn('Firestore onSnapshot gurus warning:', err);
-    });
-    unsubs.push(fsUnsub);
-  } catch (e) {}
-
-  // Fetch initial gurus from backend API
-  fetch('/api/gurus')
-    .then((res) => res.json())
-    .then((serverGurus) => {
-      if (Array.isArray(serverGurus)) {
-        serverGurus.forEach((g) => gurusMap.set(g.id, g));
-        notify();
-      }
-    })
-    .catch(() => {});
 
   return () => {
     unsubs.forEach((u) => {
@@ -526,60 +505,90 @@ export function listenToGurus(callback: (gurus: any[]) => void): () => void {
 }
 
 export async function deleteGuruApplicationFromFirebase(appId: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appId));
+  } catch (e) {
+    console.warn('Firestore delete error:', e);
+  }
   if (rtdb) {
     try {
-      await remove(ref(rtdb, `guru_applications/${appId}`));
+      remove(ref(rtdb, `guru_applications/${appId}`)).catch(() => {});
     } catch (e) {}
   }
   try {
-    await deleteDoc(doc(db, GURU_APPLICATIONS_COLLECTION, appId));
-  } catch (e) {}
-  try {
-    await fetch(`/api/guru_applications/${appId}`, { method: 'DELETE' });
+    fetch(`/api/guru_applications/${appId}`, { method: 'DELETE' }).catch(() => {});
   } catch (e) {}
 }
 
 export async function saveGuruToFirebase(guru: any): Promise<void> {
   if (!guru.id) return;
+  try {
+    await setDoc(doc(db, GURUS_COLLECTION, guru.id), guru, { merge: true });
+  } catch (e) {
+    console.warn('Firestore save guru error:', e);
+  }
   if (rtdb) {
     try {
-      await set(ref(rtdb, `gurus/${guru.id}`), guru);
+      set(ref(rtdb, `gurus/${guru.id}`), guru).catch(() => {});
     } catch (e) {}
   }
   try {
-    await setDoc(doc(db, GURUS_COLLECTION, guru.id), guru, { merge: true });
-  } catch (e) {}
-  try {
-    await fetch('/api/gurus', {
+    fetch('/api/gurus', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify([guru]),
-    });
+    }).catch(() => {});
   } catch (e) {}
 }
 
 export async function deleteGuruFromFirebase(guruId: string): Promise<void> {
-  if (rtdb) {
-    try {
-      await remove(ref(rtdb, `gurus/${guruId}`));
-    } catch (e) {}
-  }
   try {
     await deleteDoc(doc(db, GURUS_COLLECTION, guruId));
   } catch (e) {}
+  if (rtdb) {
+    try {
+      remove(ref(rtdb, `gurus/${guruId}`)).catch(() => {});
+    } catch (e) {}
+  }
 }
 
 // Backward compatible aliases
 export const saveGuruToFirestore = saveGuruToFirebase;
 export const saveApplicationToFirestore = registerGuruApplication;
 export const deleteApplicationFromFirestore = deleteGuruApplicationFromFirebase;
-export const syncGurusFromFirestore = async () => {
-  const res = await fetch('/api/gurus');
-  return res.ok ? await res.json() : [];
+
+export const syncGurusFromFirestore = async (): Promise<any[]> => {
+  try {
+    const snap = await getDocs(collection(db, GURUS_COLLECTION));
+    if (!snap.empty) {
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    }
+  } catch (err) {
+    console.warn('syncGurusFromFirestore error:', err);
+  }
+  try {
+    const res = await fetch('/api/gurus');
+    return res.ok ? await res.json() : [];
+  } catch {
+    return [];
+  }
 };
-export const syncApplicationsFromFirestore = async () => {
-  const res = await fetch('/api/guru_applications');
-  return res.ok ? await res.json() : [];
+
+export const syncApplicationsFromFirestore = async (): Promise<any[]> => {
+  try {
+    const snap = await getDocs(collection(db, GURU_APPLICATIONS_COLLECTION));
+    if (!snap.empty) {
+      return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    }
+  } catch (err) {
+    console.warn('syncApplicationsFromFirestore error:', err);
+  }
+  try {
+    const res = await fetch('/api/guru_applications');
+    return res.ok ? await res.json() : [];
+  } catch {
+    return [];
+  }
 };
 
 // Helper functions for Recharges & Bookings
